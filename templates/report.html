@@ -51,7 +51,7 @@
       <div>
         <p class="eyebrow">SALES PERFORMANCE MEETING</p>
         <h1>{{ report.year }}년 {{ report.month }}월 실적회의</h1>
-        <p>단위: 원 · 1차 → 2차 → 3차 가마감 → 실제 마감 이력 보존</p>
+        <p><strong>단위: 백만원</strong> · 저장 원데이터는 원 단위 · 1차 → 2차 → 3차 가마감 → 실제 마감 이력 보존</p>
       </div>
       <strong class="medpark-mark">MEDPARK</strong>
     </div>
@@ -64,9 +64,9 @@
     {% endif %}
 
     <div class="kpi-grid">
-      <div class="kpi"><span>3차 가마감 예상</span><strong>{{ report.third_total|money }}</strong></div>
-      <div class="kpi"><span>실제 마감</span><strong>{% if report.close_total is not none %}{{ report.close_total|money }}{% else %}입력 진행중{% endif %}</strong><small>{{ report.close_done }} / 6 파트 완료</small></div>
-      <div class="kpi"><span>가마감 대비 차이</span><strong class="{% if report.diff is not none and report.diff < 0 %}negative{% endif %}">{% if report.diff is not none %}{{ report.diff|money }}{% else %}-{% endif %}</strong></div>
+      <div class="kpi"><span>3차 가마감 예상</span><strong>{{ report.third_total|money_m }}</strong></div>
+      <div class="kpi"><span>실제 마감</span><strong>{% if report.close_total is not none %}{{ report.close_total|money_m }}{% else %}입력 진행중{% endif %}</strong><small>{{ report.close_done }} / 6 파트 완료</small></div>
+      <div class="kpi"><span>가마감 대비 차이</span><strong class="{% if report.diff is not none and report.diff < 0 %}negative{% endif %}">{% if report.diff is not none %}{{ report.diff|money_m }}{% else %}-{% endif %}</strong></div>
       <div class="kpi"><span>오차율</span><strong>{% if report.error_rate is not none %}{{ report.error_rate|pct }}{% else %}-{% endif %}</strong></div>
     </div>
 
@@ -114,26 +114,26 @@
               <td>{{ row.region }}</td>
               <td>{{ row.kind }}</td>
             {% endif %}
-            <td>{{ row.ytd|money }}</td>
-            <td>{{ row.avg|money }}</td>
-            <td>{{ row.prev_ytd|money }}</td>
+            <td>{{ row.ytd|money_m }}</td>
+            <td>{{ row.avg|money_m }}</td>
+            <td>{{ row.prev_ytd|money_m }}</td>
             <td>{{ row.growth|pct }}</td>
-            {% for m in range(1,8) %}<td>{{ row.hist.get(m,0)|money }}</td>{% endfor %}
-            <td>{{ row.prev_first|money }}</td>
-            <td>{{ row.prev_preclose|money }}</td>
-            <td>{{ row.prev_close|money }}</td>
-            <td>{{ row.first|money }}</td>
-            <td>{{ row.second|money }}</td>
-            <td class="confirmed">{{ row.third_confirmed|money }}</td>
-            <td class="forecast">{{ row.third_forecast|money }}</td>
-            <td class="closed">{{ row.close|money }}</td>
-            <td>{{ row.next_first|money }}</td>
-            <td>{{ row.qproj|money }}</td>
-            <td>{{ row.october|money }}</td>
-            <td>{{ row.november|money }}</td>
-            <td>{{ row.december|money }}</td>
-            <td>{{ row.q4proj|money }}</td>
-            <td>{{ row.second_half|money }}</td>
+            {% for m in range(1,8) %}<td>{{ row.hist.get(m,0)|money_m }}</td>{% endfor %}
+            <td>{{ row.prev_first|money_m }}</td>
+            <td>{{ row.prev_preclose|money_m }}</td>
+            <td>{{ row.prev_close|money_m }}</td>
+            <td>{{ row.first|money_m }}</td>
+            <td>{{ row.second|money_m }}</td>
+            <td class="confirmed">{{ row.third_confirmed|money_m }}</td>
+            <td class="forecast">{{ row.third_forecast|money_m }}</td>
+            <td class="closed">{{ row.close|money_m }}</td>
+            <td>{{ row.next_first|money_m }}</td>
+            <td>{{ row.qproj|money_m }}</td>
+            <td>{{ row.october|money_m }}</td>
+            <td>{{ row.november|money_m }}</td>
+            <td>{{ row.december|money_m }}</td>
+            <td>{{ row.q4proj|money_m }}</td>
+            <td>{{ row.second_half|money_m }}</td>
           </tr>
           {% endfor %}
         </tbody>
