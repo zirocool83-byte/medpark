@@ -7,6 +7,11 @@ import fcst_entry as fcst
 base = fcst.base
 app = fcst.app
 
+GLOBAL_STAGE_MAP = {
+    "최초 FCST": "1차",
+    "1차 FCST": "2차",
+}
+
 
 def can_manage_report(user):
     return bool(user and (user.get("role") == "admin" or user.get("manage_all")))
@@ -58,11 +63,14 @@ def _normalize_global_row(raw):
         month = int(raw.get("month"))
     except (TypeError, ValueError):
         return None
-    stage = str(raw.get("stage") or "").strip()
+
+    source_stage = " ".join(str(raw.get("stage") or "").split())
+    stage = GLOBAL_STAGE_MAP.get(source_stage, source_stage)
     business = str(raw.get("business") or "").strip()
     region = str(raw.get("region") or "").strip()
     kind = str(raw.get("kind") or "기존").strip()
     status = str(raw.get("status") or ("확정" if stage == "마감" else "예상")).strip()
+
     if stage not in base.STAGES:
         return None
     if business not in base.BUSINESSES:
@@ -77,11 +85,13 @@ def _normalize_global_row(raw):
         amount = float(raw.get("amount") or 0)
     except (TypeError, ValueError):
         amount = 0
+
     return {
         "id": str(raw.get("id") or f"global-{year}-{month}-{stage}-{business}-{kind}-{len(str(raw))}"),
         "year": year,
         "month": month,
         "stage": stage,
+        "source_stage": source_stage,
         "business": business,
         "region": "해외",
         "kind": kind,
@@ -333,10 +343,13 @@ def health_production():
             "entries": len(data.get("entries", [])),
             "actuals": len(data.get("actuals", {})),
             "seed_version": data.get("meta", {}).get("seed_version", ""),
-            "production_entry": "v3-global-overlay",
+            "production_entry": "v4-global-stage-map",
+            "global_stage_map": GLOBAL_STAGE_MAP,
             "global_fcst": fcst.load_fcst_status(),
             "global_overlay_rows": len(overlay),
             "global_sep2_rows": len(sep2),
+            "global_sep2_has_rows": bool(sep2),
+            "global_sep2_amount": sum(r.get("amount", 0) for r in sep2 if r.get("status") in base.COUNT_STATUSES),
         })
     except Exception:
         return base.jsonify({"status": "error"}), 500
@@ -344,4 +357,4 @@ def health_production():
 
 app.view_functions["health"] = health_production
 
-print("Production entry loaded: read-only Global Maps overlay + September dashboard active.")
+print("Production entry loaded: Global Maps stage mapping + September dashboard active.")
