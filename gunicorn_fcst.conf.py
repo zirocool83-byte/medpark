@@ -23,6 +23,7 @@ def post_worker_init(worker):
             )
         )
 
+    # 기존 실적자료 저장 핸들러를 감싸 FCST 연결 요청만 별도 처리한다.
     existing_save_comments = base.app.view_functions.get("save_comments")
 
     def save_comments_fcst_runtime():
@@ -84,36 +85,39 @@ def post_worker_init(worker):
     if existing_save_comments is not None:
         base.app.view_functions["save_comments"] = save_comments_fcst_runtime
 
-    def inject_manager_fcst_panel(response):
+    # after_request 주입 대신 취합본 뷰 자체를 감싸 실제 브라우저 HTML에 직접 삽입한다.
+    existing_report = base.app.view_functions.get("report")
+
+    def report_fcst_runtime(*args, **kwargs):
+        response = base.app.make_response(existing_report(*args, **kwargs))
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+
+        user = base.current_user()
+        if not can_manage_fcst(user):
+            return response
+        if "text/html" not in response.headers.get("Content-Type", ""):
+            return response
+
+        html = response.get_data(as_text=True)
+        if "id='global-fcst-panel'" in html or 'id="global-fcst-panel"' in html:
+            return response
+
+        saved = ext.load_credentials()
+        saved_user = escape((saved or {}).get("username", ""))
+        status = "연결정보 저장됨" if saved else "미연결"
         try:
-            if request.endpoint != "report":
-                return response
-            user = base.current_user()
-            if not can_manage_fcst(user):
-                return response
-            content_type = response.headers.get("Content-Type", "")
-            if "text/html" not in content_type:
-                return response
+            year = int(request.args.get("year", 2026))
+        except ValueError:
+            year = 2026
+        try:
+            month = int(request.args.get("month", 8))
+        except ValueError:
+            month = 8
 
-            html = response.get_data(as_text=True)
-            marker = '<section class="comment-card no-capture" id="report-writer">'
-            if marker not in html or "id='global-fcst-panel'" in html:
-                return response
-
-            saved = ext.load_credentials()
-            saved_user = escape((saved or {}).get("username", ""))
-            status = "연결정보 저장됨" if saved else "미연결"
-            try:
-                year = int(request.args.get("year", 2026))
-            except ValueError:
-                year = 2026
-            try:
-                month = int(request.args.get("month", 8))
-            except ValueError:
-                month = 8
-
-            panel = """
-<section id='global-fcst-panel' class='comment-card no-capture' style='border:2px solid #0f172a'>
+        panel = """
+<section id='global-fcst-panel' class='comment-card no-capture' style='border:2px solid #0f172a;margin-top:18px'>
   <div class='section-head'>
     <div>
       <p class='eyebrow'>GLOBAL MAPS LINK</p>
@@ -142,18 +146,25 @@ def post_worker_init(worker):
   </form>
 </section>
 """
-            panel = panel.replace("STATUS_TEXT", escape(status))
-            panel = panel.replace("YEAR_VALUE", str(year))
-            panel = panel.replace("MONTH_VALUE", str(month))
-            panel = panel.replace("SAVED_USER", saved_user)
+        panel = panel.replace("STATUS_TEXT", escape(status))
+        panel = panel.replace("YEAR_VALUE", str(year))
+        panel = panel.replace("MONTH_VALUE", str(month))
+        panel = panel.replace("SAVED_USER", saved_user)
+
+        marker = '<section class="comment-card no-capture" id="report-writer">'
+        if marker in html:
             html = html.replace(marker, panel + marker, 1)
-            response.set_data(html)
-            response.headers["Content-Length"] = str(len(response.get_data()))
-        except Exception:
-            return response
+        else:
+            html = html.replace("</main>", panel + "</main>", 1)
+
+        nav_link = "<a href='#global-fcst-panel'>해외 FCST 연결</a>"
+        html = html.replace("</nav>", nav_link + "</nav>", 1)
+        response.set_data(html)
+        response.headers["Content-Length"] = str(len(response.get_data()))
         return response
 
-    base.app.after_request_funcs.setdefault(None, []).append(inject_manager_fcst_panel)
+    if existing_report is not None:
+        base.app.view_functions["report"] = report_fcst_runtime
 
     existing_health = base.app.view_functions.get("health")
 
@@ -162,6 +173,7 @@ def post_worker_init(worker):
         try:
             data = response.get_json(silent=True) or {}
             data["global_fcst_bridge"] = True
+            data["global_fcst_render_mode"] = "report_view_wrapper"
             return base.jsonify(data)
         except Exception:
             return response
@@ -169,6 +181,7 @@ def post_worker_init(worker):
     if existing_health is not None:
         base.app.view_functions["health"] = health_fcst_runtime
 
+    # 실제 mp001 권한으로 취합본을 렌더링해 메뉴/폼까지 검증한다.
     client = base.app.test_client()
     with client.session_transaction() as sess:
         sess["user_id"] = "mp001"
@@ -177,4 +190,5 @@ def post_worker_init(worker):
     assert response.status_code == 200
     assert "해외 FCST 연결" in html
     assert "name='mode' value='global_fcst'" in html
-    print("Global FCST bridge passed: mp001 manage_all panel visible and handler active.")
+    assert "no-store" in response.headers.get("Cache-Control", "")
+    print("Global FCST bridge passed: report wrapper panel visible for mp001, no-cache active.")
