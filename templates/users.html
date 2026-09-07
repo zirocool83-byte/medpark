@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>사용자관리 · MEDPARK</title><link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}"></head>
+<body>
+<header class="topbar">
+  <div class="brand"><strong>MEDPARK</strong><span>실적회의 통합관리</span></div>
+  <nav><a href="{{url_for('report')}}">취합본</a><a href="{{url_for('input_page')}}">실적입력</a><a class="active" href="{{url_for('users')}}">사용자관리</a></nav>
+  <div class="userbox"><span><b>{{current_user.display_name}}</b> · 전체 관리</span><form method="post" action="{{url_for('logout')}}"><button class="link-btn">로그아웃</button></form></div>
+</header>
+<main class="page-shell">
+  {% with msgs=get_flashed_messages(with_categories=true) %}{% for cat,msg in msgs %}<div class="flash {{cat}}">{{msg}}</div>{% endfor %}{% endwith %}
+  <div class="page-heading"><div><p class="eyebrow">USER MANAGEMENT</p><h1>사용자 관리</h1><p>신규 사용자 추가, 비밀번호 초기화, 사용중지</p></div></div>
+
+  <section class="card">
+    <div class="section-head"><div><p class="eyebrow">ADD USER</p><h2>사용자 추가</h2></div><span>초기 비밀번호 기본값 medpark2026</span></div>
+    <form method="post" class="user-create-form">
+      <label>아이디<input name="user_id" placeholder="mp011"></label>
+      <label>이름<input name="display_name" placeholder="홍길동"></label>
+      <label>권한
+        <select name="permission_type">
+          {% for code,label in permission_labels.items() %}<option value="{{code}}">{{label}}</option>{% endfor %}
+        </select>
+      </label>
+      <label>초기 비밀번호<input name="password" value="medpark2026"></label>
+      <button class="btn primary" type="submit">추가</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="section-head"><div><p class="eyebrow">USERS</p><h2>등록 사용자</h2></div><span>{{users|length}}명</span></div>
+    <div class="table-scroll">
+      <table class="input-table">
+        <thead><tr><th>아이디</th><th>이름</th><th>권한</th><th>상태</th><th>관리</th></tr></thead>
+        <tbody>
+        {% for u in users %}
+          <tr>
+            <td><strong>{{u.user_id}}</strong></td>
+            <td>{{u.display_name}}</td>
+            <td>{{permission_labels.get(u.permission_type, u.permission_type)}}</td>
+            <td><span class="status-pill {% if u.active %}active{% else %}inactive{% endif %}">{% if u.active %}사용중{% else %}중지{% endif %}</span></td>
+            <td class="row-actions">
+              <form method="post" action="{{url_for('user_reset',user_id=u.user_id)}}" onsubmit="return confirm('비밀번호를 medpark2026으로 초기화할까요?')"><button class="btn tiny secondary">비밀번호 초기화</button></form>
+              {% if u.user_id != current_user.user_id %}
+              <form method="post" action="{{url_for('user_toggle',user_id=u.user_id)}}"><button class="btn tiny {% if u.active %}danger{% else %}secondary{% endif %}">{% if u.active %}사용중지{% else %}다시사용{% endif %}</button></form>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+</body></html>

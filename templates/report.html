@@ -1,21 +1,172 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MedPark 실적회의</title><link rel="stylesheet" href="{{ url_for('static',filename='app.css') }}"></head>
-<body class="{% if capture %}capture{% endif %}">
-{% if not capture %}<header><div><b>MEDPARK</b><span>실적회의 통합관리</span></div><nav><a class="active" href="{{ url_for('report') }}">취합본</a><a href="{{ url_for('input_page') }}">실적입력</a></nav></header>{% endif %}
-<main>
-{% with msgs=get_flashed_messages(with_categories=true) %}{% for cat,msg in msgs %}<div class="flash {{cat}}">{{msg}}</div>{% endfor %}{% endwith %}
-{% if not capture %}<section class="toolbar"><form method="get"><label>년도 <select name="year"><option>2026</option><option>2027</option></select></label><label>기준월 <select name="month">{% for m in range(1,13) %}<option value="{{m}}" {% if m==report.month %}selected{% endif %}>{{m}}월</option>{% endfor %}</select></label><button>조회</button></form><a class="button primary" href="{{ url_for('input_page',year=report.year,month=report.month) }}">입력하기</a><a class="button" target="_blank" href="{{ url_for('report',year=report.year,month=report.month,capture=1) }}">캡처용 화면</a></section>{% endif %}
-<section class="sheet">
-<div class="sheet-title"><div><h1>{{report.year}}년 {{report.month}}월 실적회의</h1><p>단위: 원 · 1차 → 2차 → 3차 가마감 → 실제 마감 이력 보존</p></div><strong>MEDPARK</strong></div>
-{% if report.comments.top %}<div class="comment"><b>회의 핵심내용</b><div>{{report.comments.top}}</div></div>{% endif %}
-<div class="kpis"><div><span>3차 가마감 예상</span><b>{{report.third_total|money}}</b></div><div><span>실제 마감</span><b>{% if report.close_total is not none %}{{report.close_total|money}}{% else %}입력 진행중{% endif %}</b><small>{{report.close_done}} / 6 파트 완료</small></div><div><span>가마감 대비 차이</span><b>{% if report.diff is not none %}{{report.diff|money}}{% else %}-{% endif %}</b></div><div><span>오차율</span><b>{% if report.error_rate is not none %}{{(report.error_rate*100)|round(1)}}%{% else %}-{% endif %}</b></div></div>
-<div class="part-status">{% for p in report.parts %}<span class="{% if p.done %}done{% endif %}">{{p.name}} · {% if p.done %}마감완료{% else %}마감미입력{% endif %}</span>{% endfor %}</div>
-<div class="table-wrap"><table><thead><tr><th rowspan="2">사업부</th><th rowspan="2">구분</th><th rowspan="2">기존/신규</th><th colspan="2">누계</th><th rowspan="2">전년 누계</th><th rowspan="2">증감율</th><th colspan="7">월 실적</th><th colspan="3">전월 비교</th><th colspan="5">{{report.month}}월</th><th rowspan="2">{{report.next_month}}월 1차</th><th rowspan="2">{{report.quarter}}Q 전망</th><th rowspan="2">하반기 전망</th></tr><tr><th>합계</th><th>평균</th>{% for m in range(1,8) %}<th>{{m}}월</th>{% endfor %}<th>{{report.prev_month}}월 1차</th><th>{{report.prev_month}}월 가마감</th><th>{{report.prev_month}}월 마감</th><th>1차 예상</th><th>2차 예상</th><th>3차 확정</th><th>3차 예상</th><th>실제 마감</th></tr></thead><tbody>
-{% for r in report.rows %}<tr class="{% if r.is_grand %}grand{% elif r.is_total %}subtotal{% endif %}">
-{% if r.is_total %}<td colspan="3">{{r.label}}</td>{% else %}<td>{{r.business}}</td><td>{{r.region}}</td><td>{{r.kind}}</td>{% endif %}
-<td>{{r.ytd|money}}</td><td>{{r.avg|round|int|money}}</td><td>{{r.prev_ytd|money}}</td><td>{% if r.growth is not none %}{{(r.growth*100)|round(1)}}%{% else %}-{% endif %}</td>
-{% for m in range(1,8) %}<td>{{r.hist.get(m,0)|money}}</td>{% endfor %}<td>{{r.prev_first|money}}</td><td>{{r.prev_preclose|money}}</td><td>{{r.prev_close|money}}</td><td>{{r.first|money}}</td><td>{{r.second|money}}</td><td class="confirmed">{{r.third_confirmed|money}}</td><td class="forecast">{{r.third_forecast|money}}</td><td class="close">{% if r.close_has %}{{r.close|money}}{% else %}-{% endif %}</td><td>{{r.next_first|money}}</td><td>{{r.qproj|money}}</td><td>{{r.second_half|money}}</td></tr>{% endfor %}
-</tbody></table></div>
-{% if report.comments.bottom %}<div class="comment bottom"><b>추가 메모 / 이월·리스크</b><div>{{report.comments.bottom}}</div></div>{% endif %}
-</section>
-{% if not capture %}<section class="comment-edit"><h2>회의 문구 입력</h2><p>여기에 적은 내용은 취합표 위·아래에 바로 표시되고 캡처용 화면에도 그대로 나옵니다.</p><form method="post" action="{{url_for('save_comments')}}"><input type="hidden" name="year" value="{{report.year}}"><input type="hidden" name="month" value="{{report.month}}"><label>작성자 <input name="writer" value="{{report.comments.updated_by}}"></label><label>상단 핵심내용<textarea name="top" rows="5" placeholder="예: 확정 00억원 / A업체 0.5억 이월 / B병원 신규 확정">{{report.comments.top}}</textarea></label><label>하단 메모<textarea name="bottom" rows="4" placeholder="예: 이월사유, 다음 차수 추진사항, 리스크">{{report.comments.bottom}}</textarea></label><button class="primary">코멘트 저장</button></form></section>{% else %}<div class="capture-help">이 화면은 PPT 캡처용입니다. 브라우저 확대/축소를 조정한 뒤 화면 캡처해서 붙여 넣으세요.</div>{% endif %}
-</main></body></html>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>실적회의 통합관리 · MEDPARK</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body class="{% if capture %}capture-mode{% endif %}">
+<header class="topbar no-capture">
+  <div class="brand"><strong>MEDPARK</strong><span>실적회의 통합관리</span></div>
+  <nav>
+    <a class="active" href="{{ url_for('report', year=report.year, month=report.month) }}">취합본</a>
+    <a href="{{ url_for('input_page', year=report.year, month=report.month) }}">실적입력</a>
+    {% if current_user.role == 'admin' %}<a href="{{ url_for('users') }}">사용자관리</a>{% endif %}
+  </nav>
+  <div class="userbox">
+    <span><b>{{ current_user.display_name }}</b> · {{ permission_label }}</span>
+    <a href="{{ url_for('password_change') }}">비밀번호</a>
+    <form method="post" action="{{ url_for('logout') }}"><button type="submit" class="link-btn">로그아웃</button></form>
+  </div>
+</header>
+
+<main class="page-shell">
+  {% with msgs=get_flashed_messages(with_categories=true) %}
+    {% for cat,msg in msgs %}<div class="flash {{cat}} no-capture">{{msg}}</div>{% endfor %}
+  {% endwith %}
+
+  <section class="toolbar no-capture">
+    <form method="get" class="inline-form">
+      <label>년도
+        <select name="year">
+          {% for y in [2025,2026,2027] %}<option value="{{y}}" {% if report.year==y %}selected{% endif %}>{{y}}</option>{% endfor %}
+        </select>
+      </label>
+      <label>기준월
+        <select name="month">
+          {% for m in range(1,13) %}<option value="{{m}}" {% if report.month==m %}selected{% endif %}>{{m}}월</option>{% endfor %}
+        </select>
+      </label>
+      <button class="btn secondary" type="submit">조회</button>
+    </form>
+    <div class="toolbar-actions">
+      <a class="btn primary" href="{{ url_for('input_page', year=report.year, month=report.month) }}">입력하기</a>
+      <a class="btn secondary" target="_blank" href="{{ url_for('report', year=report.year, month=report.month, capture=1) }}">캡처용 화면</a>
+    </div>
+  </section>
+
+  <section class="report-card">
+    <div class="report-title">
+      <div>
+        <p class="eyebrow">SALES PERFORMANCE MEETING</p>
+        <h1>{{ report.year }}년 {{ report.month }}월 실적회의</h1>
+        <p>단위: 원 · 1차 → 2차 → 3차 가마감 → 실제 마감 이력 보존</p>
+      </div>
+      <strong class="medpark-mark">MEDPARK</strong>
+    </div>
+
+    {% if report.comments.top %}
+    <div class="meeting-note top-note">
+      <strong>회의 핵심내용</strong>
+      <div>{{ report.comments.top | replace('\n','<br>') | safe }}</div>
+    </div>
+    {% endif %}
+
+    <div class="kpi-grid">
+      <div class="kpi"><span>3차 가마감 예상</span><strong>{{ report.third_total|money }}</strong></div>
+      <div class="kpi"><span>실제 마감</span><strong>{% if report.close_total is not none %}{{ report.close_total|money }}{% else %}입력 진행중{% endif %}</strong><small>{{ report.close_done }} / 6 파트 완료</small></div>
+      <div class="kpi"><span>가마감 대비 차이</span><strong class="{% if report.diff is not none and report.diff < 0 %}negative{% endif %}">{% if report.diff is not none %}{{ report.diff|money }}{% else %}-{% endif %}</strong></div>
+      <div class="kpi"><span>오차율</span><strong>{% if report.error_rate is not none %}{{ report.error_rate|pct }}{% else %}-{% endif %}</strong></div>
+    </div>
+
+    <div class="part-status">
+      {% for p in report.parts %}
+      <span class="{% if p.done %}done{% else %}pending{% endif %}">{{p.name}} · {% if p.done %}마감완료{% else %}마감미입력{% endif %}</span>
+      {% endfor %}
+    </div>
+
+    <div class="table-scroll">
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th rowspan="2">사업부</th>
+            <th rowspan="2">구분</th>
+            <th rowspan="2">기존/신규</th>
+            <th colspan="2">누계</th>
+            <th rowspan="2">전년 누계</th>
+            <th rowspan="2">증감율</th>
+            <th colspan="7">월 실적</th>
+            <th colspan="3">전월 비교</th>
+            <th colspan="5">{{ report.month }}월</th>
+            <th rowspan="2">{{ report.next_month }}월 1차</th>
+            <th rowspan="2">{{ report.quarter }}Q 전망</th>
+            <th rowspan="2">10월</th>
+            <th rowspan="2">11월</th>
+            <th rowspan="2">12월</th>
+            <th rowspan="2">4Q 전망</th>
+            <th rowspan="2">하반기 전망</th>
+          </tr>
+          <tr>
+            <th>합계</th><th>평균</th>
+            {% for m in range(1,8) %}<th>{{m}}월</th>{% endfor %}
+            <th>{{report.prev_month}}월 1차</th><th>{{report.prev_month}}월 가마감</th><th>{{report.prev_month}}월 마감</th>
+            <th>1차 예상</th><th>2차 예상</th><th>3차 확정</th><th>3차 예상</th><th>실제 마감</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in report.rows %}
+          <tr class="{% if row.is_grand %}grand{% elif row.is_total %}subtotal{% endif %}">
+            {% if row.is_total %}
+              <td colspan="3">{{ row.label }}</td>
+            {% else %}
+              <td>{{ row.business }}</td>
+              <td>{{ row.region }}</td>
+              <td>{{ row.kind }}</td>
+            {% endif %}
+            <td>{{ row.ytd|money }}</td>
+            <td>{{ row.avg|money }}</td>
+            <td>{{ row.prev_ytd|money }}</td>
+            <td>{{ row.growth|pct }}</td>
+            {% for m in range(1,8) %}<td>{{ row.hist.get(m,0)|money }}</td>{% endfor %}
+            <td>{{ row.prev_first|money }}</td>
+            <td>{{ row.prev_preclose|money }}</td>
+            <td>{{ row.prev_close|money }}</td>
+            <td>{{ row.first|money }}</td>
+            <td>{{ row.second|money }}</td>
+            <td class="confirmed">{{ row.third_confirmed|money }}</td>
+            <td class="forecast">{{ row.third_forecast|money }}</td>
+            <td class="closed">{{ row.close|money }}</td>
+            <td>{{ row.next_first|money }}</td>
+            <td>{{ row.qproj|money }}</td>
+            <td>{{ row.october|money }}</td>
+            <td>{{ row.november|money }}</td>
+            <td>{{ row.december|money }}</td>
+            <td>{{ row.q4proj|money }}</td>
+            <td>{{ row.second_half|money }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if report.comments.bottom %}
+    <div class="meeting-note bottom-note">
+      <strong>이월 · 리스크 · 후속조치</strong>
+      <div>{{ report.comments.bottom | replace('\n','<br>') | safe }}</div>
+    </div>
+    {% endif %}
+  </section>
+
+  {% if current_user.role == 'admin' %}
+  <section class="comment-card no-capture">
+    <div class="section-head">
+      <div><p class="eyebrow">MEETING COMMENT</p><h2>회의 코멘트</h2></div>
+      <span>김홍윤·김태현 관리자만 수정</span>
+    </div>
+    <form method="post" action="{{ url_for('save_comments') }}" class="comment-form">
+      <input type="hidden" name="year" value="{{ report.year }}">
+      <input type="hidden" name="month" value="{{ report.month }}">
+      <label>테이블 위 핵심내용
+        <textarea name="top" rows="5" placeholder="예: 확정 13.5억 / A건 이월 / B건 추가 확정">{{ report.comments.top }}</textarea>
+      </label>
+      <label>테이블 아래 이월·리스크·후속조치
+        <textarea name="bottom" rows="5" placeholder="예: 해외 C건 9월 이월 / 국내 D건 마감 후 반영">{{ report.comments.bottom }}</textarea>
+      </label>
+      <button class="btn primary" type="submit">코멘트 저장</button>
+    </form>
+  </section>
+  {% endif %}
+</main>
+</body>
+</html>

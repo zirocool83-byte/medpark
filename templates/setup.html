@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>초기 설정 · MEDPARK</title><link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}"></head>
+<body class="auth-page">
+  <div class="auth-card">
+    <div class="auth-brand"><strong>MEDPARK</strong><span>실적회의 통합관리</span></div>
+    <h1>초기 자료 적용</h1>
+    <p>최초 1회만 실행됩니다. 기존 1~7월 실적, 8월 가마감/마감, 사용자 계정을 적용합니다.</p>
+    {% with msgs=get_flashed_messages(with_categories=true) %}{% for cat,msg in msgs %}<div class="flash {{cat}}">{{msg}}</div>{% endfor %}{% endwith %}
+    <form method="post" class="auth-form">
+      <label>초기 설정키<input name="key" type="password" autofocus></label>
+      <button class="btn primary full" type="submit">초기자료 적용</button>
+    </form>
+  </div>
+</body></html>

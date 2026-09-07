@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>로그인 · MEDPARK</title><link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}"></head>
+<body class="auth-page">
+  <div class="auth-card">
+    <div class="auth-brand"><strong>MEDPARK</strong><span>실적회의 통합관리</span></div>
+    <h1>로그인</h1>
+    <p>부여받은 mp 계정으로 로그인하세요.</p>
+    {% with msgs=get_flashed_messages(with_categories=true) %}{% for cat,msg in msgs %}<div class="flash {{cat}}">{{msg}}</div>{% endfor %}{% endwith %}
+    <form method="post" class="auth-form">
+      <label>아이디<input name="user_id" autocomplete="username" placeholder="mp001" autofocus></label>
+      <label>비밀번호<input name="password" type="password" autocomplete="current-password"></label>
+      <button class="btn primary full" type="submit">로그인</button>
+    </form>
+    <small>초기 비밀번호: 관리자가 안내한 비밀번호를 사용하세요.</small>
+  </div>
+</body></html>
