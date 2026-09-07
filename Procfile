@@ -1,1 +1,1 @@
-web: python bootstrap.py && python verify_ui.py && gunicorn -w 1 --threads 4 -b 0.0.0.0:$PORT production_entry:app
+web: python bootstrap.py && gunicorn -w 1 --threads 2 --timeout 60 --graceful-timeout 20 --keep-alive 2 -b 0.0.0.0:$PORT production_entry:app
