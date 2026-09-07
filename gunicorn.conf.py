@@ -4,10 +4,11 @@ import json
 import os
 from datetime import datetime
 
-DATA_AUDIT_VERSION = "2026-09-08-v3"
+DATA_AUDIT_VERSION = "2026-09-08-v4-report-writer"
 
 # 원본: 실적회의_통합관리_간편형_v2.xlsx / 2. 전년대비(총괄)
-# 메디컬 해외 2025는 원본 셀 자체가 #REF!라 임의값을 만들지 않고 제외한다.
+# 메디컬 해외 2025는 원본 수식이 외부 참조 '[1](참조) 중립 목표'!29행을 바라보며
+# 현재 원본에 해당 참조파일/시트가 없어 #REF! 상태다. 임의값을 만들지 않고 제외한다.
 REFERENCE_2025 = {
     ("덴탈", "국내"): [335511544, 375179052, 608722454, 352873233, 256739986, 353787874, 337250963, 367850899, 359735402, 330408068, 320436999, 1068741794],
     ("덴탈", "해외"): [155964862, 315392944, 489602621, 694646898, 227522059, 138470265, 121366684, 239898519, 332797660, 293924457, 345038153, 663621452],
@@ -96,6 +97,7 @@ def _seed_data():
 
     changed = False
     actuals = current.setdefault("actuals", {})
+    current.setdefault("comments", {})
 
     # 2025 전년대비용 월별 실제 실적 보완. 기존값이 있어도 원본 기준으로 정합화한다.
     for (business, region), values in REFERENCE_2025.items():
@@ -109,7 +111,7 @@ def _seed_data():
     if meta.get("data_audit_version") != DATA_AUDIT_VERSION:
         meta["data_audit_version"] = DATA_AUDIT_VERSION
         meta["display_unit"] = "KRW_million"
-        meta["source_warning"] = "2025 메디컬 해외 원본 #REF! - 임의값 미입력"
+        meta["source_warning"] = "2025 메디컬 해외: 외부참조 '[1](참조) 중립 목표'!29행 누락으로 #REF! - 임의값 미입력"
         changed = True
 
     if changed or not valid:
@@ -122,7 +124,7 @@ def on_starting(server):
 
 def post_worker_init(worker):
     import app as base
-    from flask import jsonify, redirect, url_for
+    from flask import flash, has_request_context, jsonify, redirect, request, url_for
 
     def scope_pairs(user):
         if not user:
@@ -150,6 +152,9 @@ def post_worker_init(worker):
             and (entry.get("business"), entry.get("region")) in scope_pairs(user)
         )
 
+    def can_manage_report(user):
+        return bool(user and (user.get("role") == "admin" or user.get("manage_all")))
+
     def money_m(value, blank="-"):
         if value is None:
             return blank
@@ -162,6 +167,103 @@ def post_worker_init(worker):
     def setup_redirect():
         return redirect(url_for("login"))
 
+    original_report_data = base.report_data
+
+    def report_data_with_notes(year, month):
+        report = original_report_data(year, month)
+        data = base.read_store()
+        key = f"{year}-{month:02d}"
+        comments = data.get("comments", {}).get(key, {})
+        comments.setdefault("top", "")
+        comments.setdefault("bottom", "")
+        comments.setdefault("parts", {})
+        report["comments"] = comments
+
+        user = base.current_user() if has_request_context() else None
+        manage_all = can_manage_report(user)
+        editable_pairs = set(base.ALL_PAIRS if manage_all else scope_pairs(user))
+        part_notes = []
+        any_part_notes = False
+        for business in base.BUSINESSES:
+            for region in base.REGIONS:
+                note_key = f"{business}|{region}"
+                saved = comments.get("parts", {}).get(note_key, {}) or {}
+                summary = str(saved.get("summary", "") or "").strip()
+                risk = str(saved.get("risk", "") or "").strip()
+                action = str(saved.get("action", "") or "").strip()
+                has_note = bool(summary or risk or action)
+                any_part_notes = any_part_notes or has_note
+                part_notes.append({
+                    "key": note_key,
+                    "business": business,
+                    "region": region,
+                    "name": f"{business} {region}",
+                    "summary": summary,
+                    "risk": risk,
+                    "action": action,
+                    "updated_by": saved.get("updated_by", ""),
+                    "updated_at": saved.get("updated_at", ""),
+                    "has": has_note,
+                    "can_edit": (business, region) in editable_pairs,
+                })
+        report["part_notes"] = part_notes
+        report["has_part_notes"] = any_part_notes
+        report["can_manage_report"] = manage_all
+        return report
+
+    def save_comments_runtime():
+        user = base.current_user()
+        if not user:
+            return redirect(url_for("login", next=request.full_path))
+
+        try:
+            year = int(request.form.get("year", 2026))
+            month = int(request.form.get("month", 8))
+        except ValueError:
+            year, month = 2026, 8
+        if month < 1 or month > 12:
+            month = 8
+
+        data = base.read_store()
+        key = f"{year}-{month:02d}"
+        bucket = data.setdefault("comments", {}).setdefault(key, {})
+        bucket.setdefault("top", "")
+        bucket.setdefault("bottom", "")
+        bucket.setdefault("parts", {})
+        mode = request.form.get("mode", "overall")
+
+        if mode == "part":
+            raw_scope = request.form.get("scope", "")
+            if "|" not in raw_scope:
+                flash("담당 파트를 확인하세요.", "error")
+                return redirect(url_for("report", year=year, month=month) + "#report-writer")
+            business, region = raw_scope.split("|", 1)
+            pair = (business, region)
+            allowed = pair in base.ALL_PAIRS and (can_manage_report(user) or pair in scope_pairs(user))
+            if not allowed:
+                flash("해당 파트의 실적자료 작성 권한이 없습니다.", "error")
+                return redirect(url_for("report", year=year, month=month) + "#report-writer")
+            bucket["parts"][raw_scope] = {
+                "summary": request.form.get("summary", "").strip(),
+                "risk": request.form.get("risk", "").strip(),
+                "action": request.form.get("action", "").strip(),
+                "updated_by": user.get("display_name", ""),
+                "updated_at": base.now_text(),
+            }
+            flash(f"{business} {region} 실적자료를 저장했습니다.", "success")
+        else:
+            if not can_manage_report(user):
+                flash("전체 실적자료는 김홍윤 수석 또는 김태현 상무만 수정할 수 있습니다.", "error")
+                return redirect(url_for("report", year=year, month=month) + "#report-writer")
+            bucket["top"] = request.form.get("top", "").strip()
+            bucket["bottom"] = request.form.get("bottom", "").strip()
+            bucket["updated_by"] = user.get("display_name", "")
+            bucket["updated_at"] = base.now_text()
+            flash("전체 실적자료를 저장했습니다.", "success")
+
+        base.write_store(data)
+        return redirect(url_for("report", year=year, month=month) + "#report-writer")
+
     def health_runtime():
         data = base.read_store()
         return jsonify({
@@ -173,14 +275,17 @@ def post_worker_init(worker):
             "seed_version": data.get("meta", {}).get("seed_version", ""),
             "data_audit_version": data.get("meta", {}).get("data_audit_version", ""),
             "display_unit": "KRW_million",
+            "report_writer": True,
             "runtime_patch": True,
         })
 
     base.scope_pairs = scope_pairs
     base.can_edit_entry = can_edit_entry
+    base.report_data = report_data_with_notes
     base.app.jinja_env.filters["money_m"] = money_m
     base.app.view_functions["setup"] = setup_redirect
     base.app.view_functions["health"] = health_runtime
+    base.app.view_functions["save_comments"] = save_comments_runtime
 
     # 1) 사용자/권한 검증
     data = base.read_store()
@@ -252,7 +357,7 @@ def post_worker_init(worker):
     for label, (actual, expected) in totals.items():
         assert abs(float(actual) - float(expected)) < 0.01, (label, actual, expected)
 
-    # 6) 실제 렌더링 단위 검증
+    # 6) 실제 렌더링 및 실적자료 작성 UI 검증
     client = base.app.test_client()
     with client.session_transaction() as sess:
         sess["user_id"] = "mp001"
@@ -261,5 +366,7 @@ def post_worker_init(worker):
     assert response.status_code == 200
     assert "단위: 백만원" in html
     assert "1,483.7" in html
+    assert "실적자료 작성" in html
+    assert "주요 실적·변동" in html
 
-    print("Performance audit passed: 2025 reference, 2026 actuals/FCST, users/permissions, KRW-million display.")
+    print("Performance audit passed: data, users/permissions, KRW-million display and report writer UI.")
