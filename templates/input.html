@@ -5,13 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>실적입력 · MEDPARK</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='performance_v2.css') }}">
 </head>
 <body>
 <header class="topbar">
   <div class="brand"><strong>MEDPARK</strong><span>실적회의 통합관리</span></div>
   <nav>
-    <a href="{{ url_for('report', year=year, month=month) }}">취합본</a>
+    <a href="{{ url_for('report', year=year, month=month) }}">대시보드</a>
     <a class="active" href="{{ url_for('input_page', year=year, month=month) }}">실적입력</a>
+    <a href="{{ url_for('report', year=year, month=month) }}#detail-table">상세표</a>
+    <a href="{{ url_for('report', year=year, month=month) }}#report-writer">실적자료 작성</a>
+    {% if current_user.role == 'admin' or current_user.get('manage_all') %}<a href="{{ url_for('report', year=year, month=month) }}#global-fcst-panel">해외 FCST</a>{% endif %}
     {% if current_user.role == 'admin' %}<a href="{{ url_for('users') }}">사용자관리</a>{% endif %}
   </nav>
   <div class="userbox">
@@ -28,85 +32,68 @@
   <section class="toolbar input-toolbar">
     <form method="get" class="inline-form">
       <label>년도
-        <select name="year">
-          {% for y in [2025,2026,2027] %}<option value="{{y}}" {% if year==y %}selected{% endif %}>{{y}}</option>{% endfor %}
-        </select>
+        <select name="year">{% for y in [2025,2026,2027] %}<option value="{{y}}" {% if year==y %}selected{% endif %}>{{y}}</option>{% endfor %}</select>
       </label>
       <label>월
-        <select name="month">
-          {% for m in range(1,13) %}<option value="{{m}}" {% if month==m %}selected{% endif %}>{{m}}월</option>{% endfor %}
-        </select>
+        <select name="month">{% for m in range(1,13) %}<option value="{{m}}" {% if month==m %}selected{% endif %}>{{m}}월</option>{% endfor %}</select>
       </label>
       <label>회차
-        <select name="stage">
-          {% for s in stages %}<option value="{{s}}" {% if stage==s %}selected{% endif %}>{{s}}{% if s=='3차' %} 가마감{% endif %}</option>{% endfor %}
-        </select>
+        <select name="stage">{% for s in stages %}<option value="{{s}}" {% if stage==s %}selected{% endif %}>{{s}}{% if s=='3차' %} 가마감{% endif %}</option>{% endfor %}</select>
       </label>
       <label>담당 파트
-        <select name="scope">
-          {% for b,r in allowed_pairs %}
-          <option value="{{b}}|{{r}}" {% if scope==b~'|'~r %}selected{% endif %}>{{b}} {{r}}</option>
-          {% endfor %}
-        </select>
+        <select name="scope">{% for b,r in allowed_pairs %}<option value="{{b}}|{{r}}" {% if scope==b~'|'~r %}selected{% endif %}>{{b}} {{r}}</option>{% endfor %}</select>
       </label>
       <button class="btn secondary" type="submit">불러오기</button>
     </form>
-    <a class="btn secondary" href="{{ url_for('report', year=year, month=month) }}">취합본 보기</a>
+    <div class="toolbar-actions">
+      <a class="btn secondary" href="{{ url_for('report', year=year, month=month) }}">대시보드 보기</a>
+    </div>
   </section>
 
-  <div class="page-heading">
-    <div>
-      <p class="eyebrow">MULTI USER INPUT</p>
-      <h1>{{year}}년 {{month}}월 · {{business}} {{region}} · {{stage}}{% if stage=='3차' %} 가마감{% endif %}</h1>
-      <p>작성자: {{ current_user.display_name }} · 저장 즉시 전체 취합본 반영</p>
+  <section class="meeting-hero">
+    <div class="hero-head">
+      <div class="hero-title">
+        <p class="eyebrow">MULTI USER INPUT</p>
+        <h1>{{year}}년 {{month}}월 · {{business}} {{region}}</h1>
+        <p>{{stage}}{% if stage=='3차' %} 가마감{% endif %} · 작성자 {{ current_user.display_name }} · 저장 즉시 취합본 반영</p>
+      </div>
+      <div class="hero-badges">
+        <span class="hero-badge {% if stage=='2차' %}live{% endif %}">{{stage}}{% if stage=='3차' %} 가마감{% endif %}</span>
+        <span class="hero-badge">{{business}} {{region}}</span>
+      </div>
     </div>
-  </div>
+    <div class="hero-metrics" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+      <div class="hero-metric primary"><span>현재 집계</span><strong>{{current|money}}</strong><small>확정 + 예상 + 추진</small></div>
+      <div class="hero-metric"><span>확정</span><strong>{{sums['확정']|money}}</strong><small>현재 확정 매출</small></div>
+      <div class="hero-metric"><span>예상 / 추진</span><strong>{{(sums['예상']+sums['추진'])|money}}</strong><small>추가 가능 매출</small></div>
+      <div class="hero-metric"><span>이월</span><strong>{{sums['이월']|money}}</strong><small>차월 이월 예정</small></div>
+    </div>
+  </section>
 
-  <div class="mini-kpis">
-    <div><span>현재 집계</span><strong>{{current|money}}</strong></div>
-    <div><span>확정</span><strong>{{sums['확정']|money}}</strong></div>
-    <div><span>예상/추진</span><strong>{{(sums['예상']+sums['추진'])|money}}</strong></div>
-    <div><span>이월</span><strong>{{sums['이월']|money}}</strong></div>
-  </div>
-
-  <section class="card">
-    <div class="section-head">
-      <div><p class="eyebrow">ADD ITEM</p><h2>실적 입력</h2></div>
-      {% if stage=='마감' %}<span class="notice">마감은 실제 확정매출만 입력됩니다.</span>{% endif %}
+  <section class="stage-card">
+    <div class="section-title-row">
+      <div><h2>실적 입력</h2><p>거래처/주요건 단위로 입력하고 상태를 확정·예상·추진·이월·제외로 구분합니다.</p></div>
+      {% if stage=='마감' %}<span class="notice">마감은 실제 확정매출만 입력</span>{% else %}<span class="subaction">{{rows|length}}건 입력됨</span>{% endif %}
     </div>
     <form method="post" class="entry-form">
       <input type="hidden" name="action" value="add">
-      <input type="hidden" name="year" value="{{year}}">
-      <input type="hidden" name="month" value="{{month}}">
-      <input type="hidden" name="stage" value="{{stage}}">
-      <input type="hidden" name="scope" value="{{scope}}">
-      <label>기존/신규
-        <select name="kind">{% for k in kinds %}<option>{{k}}</option>{% endfor %}</select>
-      </label>
+      <input type="hidden" name="year" value="{{year}}"><input type="hidden" name="month" value="{{month}}"><input type="hidden" name="stage" value="{{stage}}"><input type="hidden" name="scope" value="{{scope}}">
+      <label>기존 / 신규<select name="kind">{% for k in kinds %}<option>{{k}}</option>{% endfor %}</select></label>
       <label>상태
-        {% if stage=='마감' %}
-        <input value="확정" disabled><input type="hidden" name="status" value="확정">
-        {% else %}
-        <select name="status">{% for s in statuses %}<option value="{{s}}" {% if s=='예상' %}selected{% endif %}>{{s}}</option>{% endfor %}</select>
-        {% endif %}
+        {% if stage=='마감' %}<input value="확정" disabled><input type="hidden" name="status" value="확정">
+        {% else %}<select name="status">{% for s in statuses %}<option value="{{s}}" {% if s=='예상' %}selected{% endif %}>{{s}}</option>{% endfor %}</select>{% endif %}
       </label>
-      <label class="wide">거래처 / 주요건
-        <input name="item" placeholder="예: A병원, B업체, 해외 C국가">
-      </label>
-      <label>금액
-        <input name="amount" inputmode="numeric" placeholder="예: 50000000">
-      </label>
-      <label class="wide">내용 / 변동사유
-        <input name="note" placeholder="예: 확정, 9월 이월, 발주 일정 변경">
-      </label>
+      <label class="wide">거래처 / 주요건<input name="item" placeholder="예: A병원, B업체, 해외 C국가"></label>
+      <label>금액<input name="amount" inputmode="numeric" placeholder="예: 50000000"></label>
+      <label class="wide">내용 / 변동사유<input name="note" placeholder="예: 확정, 차월 이월, 발주 일정 변경"></label>
       <button class="btn primary" type="submit">저장</button>
     </form>
   </section>
 
-  <section class="card">
-    <div class="section-head">
-      <div><p class="eyebrow">CURRENT INPUTS</p><h2>현재 입력내역</h2></div>
-      <span>{{rows|length}}건</span>
+  <section class="card" style="border-radius:16px;box-shadow:0 5px 20px rgba(18,51,90,.05)">
+    <div class="section-title-row">
+      <div><h2>현재 입력내역</h2><p>{{business}} {{region}} · {{stage}} 기준 입력 건</p></div>
+      <span class="subaction">{{rows|length}}건</span>
     </div>
     <div class="table-scroll">
       <table class="input-table">
@@ -117,39 +104,25 @@
             {% if row.can_edit %}
             <form method="post" action="{{ url_for('edit_entry', entry_id=row.id) }}">
               <td><select name="kind">{% for k in kinds %}<option {% if row.kind==k %}selected{% endif %}>{{k}}</option>{% endfor %}</select></td>
-              <td>
-                {% if row.stage=='마감' %}
-                <input value="확정" disabled><input type="hidden" name="status" value="확정">
-                {% else %}
-                <select name="status">{% for s in statuses %}<option {% if row.status==s %}selected{% endif %}>{{s}}</option>{% endfor %}</select>
-                {% endif %}
-              </td>
+              <td>{% if row.stage=='마감' %}<input value="확정" disabled><input type="hidden" name="status" value="확정">{% else %}<select name="status">{% for s in statuses %}<option {% if row.status==s %}selected{% endif %}>{{s}}</option>{% endfor %}</select>{% endif %}</td>
               <td><input name="item" value="{{row.item}}"></td>
               <td><input name="amount" value="{{row.amount}}" inputmode="numeric"></td>
               <td><input name="note" value="{{row.note}}"></td>
               <td>{{row.writer}}{% if row.seeded %}<small>초기이관</small>{% endif %}</td>
               <td>{{row.updated_at}}</td>
-              <td class="row-actions">
-                <button class="btn tiny secondary" type="submit">수정</button>
+              <td class="row-actions"><button class="btn tiny secondary" type="submit">수정</button>
             </form>
-                <form method="post" action="{{ url_for('delete_entry', entry_id=row.id) }}" onsubmit="return confirm('삭제할까요?')">
-                  <button class="btn tiny danger" type="submit">삭제</button>
-                </form>
+                <form method="post" action="{{ url_for('delete_entry', entry_id=row.id) }}" onsubmit="return confirm('삭제할까요?')"><button class="btn tiny danger" type="submit">삭제</button></form>
               </td>
             {% else %}
-              <td>{{row.kind}}</td><td>{{row.status}}</td><td>{{row.item}}</td><td class="num">{{row.amount|money}}</td><td>{{row.note}}</td>
-              <td>{{row.writer}}{% if row.seeded %}<small>초기이관</small>{% endif %}</td><td>{{row.updated_at}}</td><td><span class="muted">조회만 가능</span></td>
+              <td>{{row.kind}}</td><td>{{row.status}}</td><td>{{row.item}}</td><td class="num">{{row.amount|money}}</td><td>{{row.note}}</td><td>{{row.writer}}{% if row.seeded %}<small>초기이관</small>{% endif %}</td><td>{{row.updated_at}}</td><td><span class="muted">조회만 가능</span></td>
             {% endif %}
           </tr>
-        {% else %}
-          <tr><td colspan="8" class="empty">입력된 내역이 없습니다.</td></tr>
-        {% endfor %}
+        {% else %}<tr><td colspan="8" class="empty">입력된 내역이 없습니다.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>
-    {% if current_user.role != 'admin' %}
-    <p class="helper">일반 사용자는 본인이 입력한 건만 수정·삭제할 수 있습니다. 초기 이관값과 다른 사용자의 입력은 관리자만 수정할 수 있습니다.</p>
-    {% endif %}
+    {% if current_user.role != 'admin' %}<p class="helper">일반 사용자는 본인이 입력한 건만 수정·삭제할 수 있습니다. 초기 이관값과 다른 사용자의 입력은 관리자만 수정할 수 있습니다.</p>{% endif %}
   </section>
 </main>
 </body>
