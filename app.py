@@ -2,11 +2,13 @@ import json
 import os
 import threading
 import uuid
+from copy import deepcopy
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('APP_SECRET_KEY', 'medpark-performance-local')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get('DATA_DIR', '/app/user_data')
 os.makedirs(DATA_DIR, exist_ok=True)
 DATA_FILE = os.path.join(DATA_DIR, 'performance_data.json')
@@ -27,6 +29,7 @@ def now_text():
 def ensure_store():
     if os.path.exists(DATA_FILE):
         return
+    os.makedirs(DATA_DIR, exist_ok=True)
     raw = os.environ.get('INITIAL_DATA', '').strip()
     seed = json.loads(raw) if raw else {'actuals': {}, 'entries': [], 'comments': {}}
     tmp = DATA_FILE + '.tmp'
@@ -208,6 +211,7 @@ def input_page():
         else:
             status = request.form.get('status','예상'); kind=request.form.get('kind','기존')
             if status not in STATUSES: status='예상'
+            if stage == '마감': status='확정'
             if kind not in KINDS: kind='기존'
             amount=int_value(request.form.get('amount'))
             data=read_store(); data.setdefault('entries',[]).append({
@@ -230,6 +234,7 @@ def edit_entry(entry_id):
     if not entry: return 'Not found',404
     entry['kind']=request.form.get('kind',entry['kind']) if request.form.get('kind') in KINDS else entry['kind']
     entry['status']=request.form.get('status',entry['status']) if request.form.get('status') in STATUSES else entry['status']
+    if entry['stage'] == '마감': entry['status'] = '확정'
     entry['item']=request.form.get('item',entry['item']).strip() or '미기재'; entry['amount']=int_value(request.form.get('amount'))
     entry['note']=request.form.get('note','').strip(); entry['writer']=request.form.get('writer',entry['writer']).strip() or entry['writer']; entry['updated_at']=now_text(); entry['seeded']=False
     write_store(data); flash('수정했습니다.','success')
