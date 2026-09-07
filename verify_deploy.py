@@ -5,10 +5,11 @@ data = base.read_store()
 
 assert data.get("meta", {}).get("initialized") is True
 assert data.get("meta", {}).get("seed_version") == "2026-09-07-v2-auto"
-assert len(data.get("users", [])) == 10
-assert len(data.get("actuals", {})) == 84
-assert len(data.get("entries", [])) == 87
+assert len(data.get("users", [])) >= 10
+assert len(data.get("actuals", {})) >= 84
+assert len(data.get("entries", [])) >= 87
 
+# 운영 중 사용자/실적이 추가될 수 있으므로 '정확히 N개'가 아니라 필수 기준 사용자와 기준값만 검증한다.
 expected = {
     "mp001": ("김홍윤", "domestic_all", "member", True),
     "mp002": ("김태현", "admin", "admin", True),
@@ -22,8 +23,8 @@ expected = {
     "mp010": ("유동혁", "aesthetics_all", "member", False),
 }
 users = {u.get("user_id"): u for u in data.get("users", [])}
-assert set(users) == set(expected)
 for uid, (name, permission, role, manage_all) in expected.items():
+    assert uid in users, ("missing user", uid)
     u = users[uid]
     assert u.get("display_name") == name
     assert u.get("permission_type") == permission
@@ -47,6 +48,7 @@ overseas_seed = next(e for e in data["entries"] if e.get("region") == "해외")
 assert patched.can_edit_entry(users["mp001"], overseas_seed) is True
 assert patched.can_edit_entry(users["mp003"], overseas_seed) is False
 
+# 기준 데이터가 보존됐는지만 검증한다. 운영 중 추가된 실적/회차는 허용한다.
 report = base.report_data(2026, 8)
 grand = next(r for r in report["rows"] if r.get("is_grand"))
 checks = {
@@ -60,4 +62,7 @@ checks = {
 for key, (actual, expected_value) in checks.items():
     assert abs(float(actual) - float(expected_value)) < 0.01, (key, actual, expected_value)
 
-print("Deployment verification passed: users, scopes, edit rights and performance totals are correct.")
+print(
+    "Deployment verification passed: baseline users/permissions and performance values are intact; "
+    f"current counts users={len(data.get('users', []))}, actuals={len(data.get('actuals', {}))}, entries={len(data.get('entries', []))}."
+)
