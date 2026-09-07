@@ -10,6 +10,12 @@ import uuid
 from datetime import datetime
 from functools import wraps
 import secrets
+import http.cookiejar
+import urllib.error
+import urllib.parse
+import urllib.request
+from html import escape
+from html.parser import HTMLParser
 
 from flask import Flask, flash, redirect, render_template, request, session, url_for, jsonify
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -20,7 +26,15 @@ os.makedirs(DATA_DIR, exist_ok=True)
 DATA_FILE = os.path.join(DATA_DIR, "performance_data.json")
 BOOTSTRAP_FILE = os.path.join(BASE_DIR, "bootstrap.enc")
 SECRET_FILE = os.path.join(DATA_DIR, ".session_secret")
+GLOBAL_FCST_AUTH_FILE = os.path.join(DATA_DIR, ".global_fcst_auth")
+GLOBAL_MAPS_BASE_URL = os.environ.get(
+    "GLOBAL_MAPS_BASE_URL", "https://medprk-medpark-global-maps.mycafe24.ai"
+).rstrip("/")
+GLOBAL_MAPS_FCST_PATH = os.environ.get(
+    "GLOBAL_MAPS_FCST_PATH", "/api/monthly_sales_fcst"
+)
 LOCK = threading.RLock()
+
 
 def load_session_secret():
     configured = os.environ.get("APP_SECRET_KEY", "").strip()
@@ -32,6 +46,7 @@ def load_session_secret():
     with open(SECRET_FILE, "w", encoding="utf-8") as f:
         f.write(value)
     return value
+
 
 app = Flask(__name__)
 app.secret_key = load_session_secret()
@@ -632,10 +647,227 @@ def user_toggle(user_id):
     return redirect(url_for("users"))
 
 
+# ---- Global Maps FCST read-only bridge ------------------------------------
+class _LoginFormParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.forms = []
+        self._form = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag.lower() == "form":
+            self._form = {"action": attrs.get("action", ""), "method": attrs.get("method", "get").lower(), "inputs": []}
+        elif tag.lower() == "input" and self._form is not None:
+            self._form["inputs"].append({
+                "name": attrs.get("name", ""),
+                "type": attrs.get("type", "text").lower(),
+                "value": attrs.get("value", ""),
+            })
+
+    def handle_endtag(self, tag):
+        if tag.lower() == "form" and self._form is not None:
+            self.forms.append(self._form)
+            self._form = None
+
+
+def _credential_keys():
+    master = hashlib.sha256(str(app.secret_key).encode("utf-8")).digest()
+    return (
+        hmac.new(master, b"global-fcst-enc", hashlib.sha256).digest(),
+        hmac.new(master, b"global-fcst-mac", hashlib.sha256).digest(),
+    )
+
+
+def _seal_global_credentials(username, password):
+    enc_key, mac_key = _credential_keys()
+    nonce = secrets.token_bytes(16)
+    plain = json.dumps({"username": username, "password": password}, ensure_ascii=False).encode("utf-8")
+    body = bytearray()
+    for counter, offset in enumerate(range(0, len(plain), 32)):
+        block = plain[offset:offset + 32]
+        stream = hmac.new(enc_key, nonce + struct.pack(">Q", counter), hashlib.sha256).digest()
+        body.extend(bytes(a ^ b for a, b in zip(block, stream)))
+    tag = hmac.new(mac_key, nonce + bytes(body), hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(nonce + bytes(body) + tag).decode("ascii")
+
+
+def _open_global_credentials():
+    if not os.path.exists(GLOBAL_FCST_AUTH_FILE):
+        return None
+    try:
+        packed = base64.urlsafe_b64decode(open(GLOBAL_FCST_AUTH_FILE, "r", encoding="utf-8").read().strip())
+        if len(packed) < 48:
+            return None
+        nonce, body, tag = packed[:16], packed[16:-32], packed[-32:]
+        enc_key, mac_key = _credential_keys()
+        expected = hmac.new(mac_key, nonce + body, hashlib.sha256).digest()
+        if not hmac.compare_digest(tag, expected):
+            return None
+        plain = bytearray()
+        for counter, offset in enumerate(range(0, len(body), 32)):
+            block = body[offset:offset + 32]
+            stream = hmac.new(enc_key, nonce + struct.pack(">Q", counter), hashlib.sha256).digest()
+            plain.extend(bytes(a ^ b for a, b in zip(block, stream)))
+        data = json.loads(bytes(plain).decode("utf-8"))
+        if data.get("username") and data.get("password"):
+            return data
+    except Exception:
+        return None
+    return None
+
+
+def _save_global_credentials(username, password):
+    tmp = GLOBAL_FCST_AUTH_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(_seal_global_credentials(username, password))
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, GLOBAL_FCST_AUTH_FILE)
+
+
+def _pick_login_form(html_text):
+    parser = _LoginFormParser()
+    parser.feed(html_text)
+    for form in parser.forms:
+        if any(i.get("type") == "password" and i.get("name") for i in form["inputs"]):
+            return form
+    return parser.forms[0] if parser.forms else None
+
+
+def _login_field_names(form):
+    inputs = [i for i in form.get("inputs", []) if i.get("name")]
+    password = next((i["name"] for i in inputs if i.get("type") == "password"), None)
+    preferred = ["user_id", "username", "login_id", "userid", "email", "id"]
+    names = {i["name"].lower(): i["name"] for i in inputs}
+    username = next((names[n] for n in preferred if n in names), None)
+    if not username:
+        username = next((i["name"] for i in inputs if i.get("type") in {"text", "email"}), None)
+    return username, password
+
+
+def fetch_global_fcst(username, password, timeout=12):
+    if not username or not password:
+        raise ValueError("Global Maps 로그인 정보가 없습니다.")
+    jar = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+    opener.addheaders = [("User-Agent", "MedPark-Performance-Report/1.0")]
+    login_url = GLOBAL_MAPS_BASE_URL + "/login"
+    try:
+        with opener.open(login_url, timeout=timeout) as response:
+            login_html = response.read().decode("utf-8", "replace")
+    except Exception as exc:
+        raise RuntimeError(f"Global Maps 로그인 페이지 접속 실패: {type(exc).__name__}") from exc
+    form = _pick_login_form(login_html)
+    if not form:
+        raise RuntimeError("Global Maps 로그인 폼을 찾지 못했습니다.")
+    user_field, pass_field = _login_field_names(form)
+    if not user_field or not pass_field:
+        raise RuntimeError("Global Maps 로그인 필드 구조를 확인하지 못했습니다.")
+    payload = {}
+    for item in form.get("inputs", []):
+        name = item.get("name")
+        if name and item.get("type") in {"hidden", "submit"}:
+            payload[name] = item.get("value", "")
+    payload[user_field] = username
+    payload[pass_field] = password
+    action = urllib.parse.urljoin(login_url, form.get("action") or login_url)
+    req = urllib.request.Request(
+        action,
+        data=urllib.parse.urlencode(payload).encode("utf-8"),
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    try:
+        with opener.open(req, timeout=timeout) as response:
+            response.read(256)
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"Global Maps 로그인 실패 (HTTP {exc.code})") from exc
+    api_url = urllib.parse.urljoin(GLOBAL_MAPS_BASE_URL + "/", GLOBAL_MAPS_FCST_PATH.lstrip("/"))
+    api_req = urllib.request.Request(api_url, headers={"Accept": "application/json"})
+    try:
+        with opener.open(api_req, timeout=timeout) as response:
+            raw = response.read()
+            content_type = response.headers.get("Content-Type", "")
+    except urllib.error.HTTPError as exc:
+        if exc.code in {401, 403}:
+            raise RuntimeError(f"Global Maps 인증 실패 (HTTP {exc.code})") from exc
+        raise RuntimeError(f"Global Maps FCST 조회 실패 (HTTP {exc.code})") from exc
+    text = raw.decode("utf-8", "replace")
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        if "text/html" in content_type.lower() or "<html" in text[:300].lower():
+            raise RuntimeError("FCST API 대신 로그인/HTML 화면이 반환되었습니다.") from exc
+        raise RuntimeError("Global Maps FCST 응답이 JSON이 아닙니다.") from exc
+    return data
+
+
+def _payload_summary(payload):
+    summary = {"type": type(payload).__name__}
+    rows = None
+    if isinstance(payload, list):
+        rows = payload
+    elif isinstance(payload, dict):
+        summary["keys"] = sorted(str(k) for k in payload.keys())[:50]
+        for key in ("rows", "data", "items", "results", "fcst", "forecasts"):
+            if isinstance(payload.get(key), list):
+                rows = payload[key]
+                summary["rows_key"] = key
+                break
+    if rows is not None:
+        summary["row_count"] = len(rows)
+        if rows and isinstance(rows[0], dict):
+            summary["row_keys"] = sorted(str(k) for k in rows[0].keys())[:80]
+    return summary
+
+
+@app.route("/global-fcst", methods=["GET", "POST"])
+@admin_required
+def global_fcst_settings():
+    saved = _open_global_credentials()
+    message = ""
+    ok = False
+    summary = None
+    if request.method == "POST":
+        action = request.form.get("action", "test")
+        if action == "delete":
+            if os.path.exists(GLOBAL_FCST_AUTH_FILE):
+                os.remove(GLOBAL_FCST_AUTH_FILE)
+            message = "저장된 Global Maps 연결정보를 삭제했습니다."
+            saved = None
+        else:
+            username = request.form.get("username", "").strip() or (saved or {}).get("username", "")
+            password = request.form.get("password", "") or (saved or {}).get("password", "")
+            try:
+                payload = fetch_global_fcst(username, password)
+                summary = _payload_summary(payload)
+                ok = True
+                message = "Global Maps FCST 읽기 연결에 성공했습니다. Global Maps 데이터는 변경하지 않았습니다."
+                if request.form.get("save") == "1":
+                    _save_global_credentials(username, password)
+                    saved = {"username": username, "password": password}
+                    message += " 연결정보는 공간4에 암호화 저장했습니다."
+            except Exception as exc:
+                message = str(exc)
+    safe_user = escape((saved or {}).get("username", ""))
+    safe_message = escape(message)
+    summary_html = ""
+    if summary is not None:
+        summary_html = "<pre style='background:#f6f8fa;padding:12px;border-radius:8px;overflow:auto'>" + escape(json.dumps(summary, ensure_ascii=False, indent=2)) + "</pre>"
+    status_text = "연결 성공" if ok else ("연결정보 저장됨" if saved else "미연결")
+    return f"""<!doctype html><html lang='ko'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Global Maps FCST 연결</title>
+<style>body{{font-family:system-ui,-apple-system,sans-serif;max-width:760px;margin:40px auto;padding:0 18px;color:#1f2937}}.card{{border:1px solid #e5e7eb;border-radius:14px;padding:22px;margin:16px 0}}label{{display:block;font-weight:700;margin:12px 0 6px}}input{{width:100%;box-sizing:border-box;padding:11px;border:1px solid #cbd5e1;border-radius:8px}}button{{padding:10px 16px;border:0;border-radius:8px;background:#111827;color:white;font-weight:700;margin:12px 8px 0 0}}.sub{{background:#475569}}.danger{{background:#b91c1c}}.note{{font-size:14px;color:#475569;line-height:1.6}}.msg{{padding:12px;background:#f8fafc;border-radius:8px;margin-top:14px}}</style></head><body>
+<h1>Global Maps FCST 읽기 전용 연결</h1><p class='note'>대상: {escape(GLOBAL_MAPS_BASE_URL)}<br>Global Maps에는 로그인과 FCST GET 조회만 수행합니다. 입력·수정·삭제 요청은 보내지 않습니다.</p>
+<div class='card'><b>현재 상태: {escape(status_text)}</b>{('<div class=\"msg\">' + safe_message + '</div>') if message else ''}{summary_html}</div>
+<div class='card'><form method='post'><label>Global Maps 로그인 ID</label><input name='username' autocomplete='username' value='{safe_user}' placeholder='Global Maps ID'><label>Global Maps 비밀번호</label><input type='password' name='password' autocomplete='current-password' placeholder='저장된 정보가 있으면 비워도 됩니다'><label style='font-weight:500'><input type='checkbox' name='save' value='1' style='width:auto'> 연결 성공 시 공간4에 암호화 저장</label><button name='action' value='test'>연결 테스트</button><button class='sub' name='action' value='test'>저장 후 테스트</button></form></div>
+<div class='card'><form method='post'><button class='danger' name='action' value='delete'>저장된 연결정보 삭제</button></form></div>
+<p><a href='/'>실적보고서로 돌아가기</a></p></body></html>"""
+
+
 @app.get("/health")
 def health():
     data = read_store()
-    return jsonify({"status": "ok", "initialized": bool(data.get("meta", {}).get("initialized")), "users": len(data.get("users", [])), "entries": len(data.get("entries", [])), "actuals": len(data.get("actuals", {})), "seed_version": data.get("meta", {}).get("seed_version", "")})
+    return jsonify({"status": "ok", "initialized": bool(data.get("meta", {}).get("initialized")), "users": len(data.get("users", [])), "entries": len(data.get("entries", [])), "actuals": len(data.get("actuals", {})), "seed_version": data.get("meta", {}).get("seed_version", ""), "global_fcst_configured": bool(_open_global_credentials())})
 
 
 if __name__ == "__main__":
