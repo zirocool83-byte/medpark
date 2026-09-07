@@ -12,7 +12,7 @@
   <div class="page-heading"><div><p class="eyebrow">USER MANAGEMENT</p><h1>사용자 관리</h1><p>신규 사용자 추가, 비밀번호 초기화, 사용중지</p></div></div>
 
   <section class="card">
-    <div class="section-head"><div><p class="eyebrow">ADD USER</p><h2>사용자 추가</h2></div><span>초기 비밀번호 기본값 medpark2026</span></div>
+    <div class="section-head"><div><p class="eyebrow">ADD USER</p><h2>사용자 추가</h2></div><span>초기 비밀번호는 관리자 지정</span></div>
     <form method="post" class="user-create-form">
       <label>아이디<input name="user_id" placeholder="mp011"></label>
       <label>이름<input name="display_name" placeholder="홍길동"></label>
@@ -21,7 +21,7 @@
           {% for code,label in permission_labels.items() %}<option value="{{code}}">{{label}}</option>{% endfor %}
         </select>
       </label>
-      <label>초기 비밀번호<input name="password" value="medpark2026"></label>
+      <label>초기 비밀번호<input name="password" type="password" placeholder="8자 이상"></label>
       <button class="btn primary" type="submit">추가</button>
     </form>
   </section>
@@ -39,7 +39,7 @@
             <td>{{permission_labels.get(u.permission_type, u.permission_type)}}</td>
             <td><span class="status-pill {% if u.active %}active{% else %}inactive{% endif %}">{% if u.active %}사용중{% else %}중지{% endif %}</span></td>
             <td class="row-actions">
-              <form method="post" action="{{url_for('user_reset',user_id=u.user_id)}}" onsubmit="return confirm('비밀번호를 medpark2026으로 초기화할까요?')"><button class="btn tiny secondary">비밀번호 초기화</button></form>
+              <form method="post" action="{{url_for('user_reset',user_id=u.user_id)}}" onsubmit="return confirm('비밀번호를 초기 비밀번호로 되돌릴까요?')"><button class="btn tiny secondary">비밀번호 초기화</button></form>
               {% if u.user_id != current_user.user_id %}
               <form method="post" action="{{url_for('user_toggle',user_id=u.user_id)}}"><button class="btn tiny {% if u.active %}danger{% else %}secondary{% endif %}">{% if u.active %}사용중지{% else %}다시사용{% endif %}</button></form>
               {% endif %}
