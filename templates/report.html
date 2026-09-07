@@ -12,10 +12,11 @@
 <header class="topbar no-capture">
   <div class="brand"><strong>MEDPARK</strong><span>실적회의 통합관리</span></div>
   <nav>
-    <a class="active" href="{{ url_for('report', year=report.year, month=report.month) }}">취합본</a>
+    <a class="active" href="{{ url_for('report', year=report.year, month=report.month) }}">대시보드</a>
     <a href="{{ url_for('input_page', year=report.year, month=report.month) }}">실적입력</a>
-    <a href="{{ url_for('report', year=report.year, month=report.month) }}#report-writer">실적자료 작성</a>
-    {% if current_user.role == 'admin' or current_user.get('manage_all') %}<a href="#global-fcst-panel">해외 FCST 연결</a>{% endif %}
+    <a href="#detail-table">상세표</a>
+    <a href="#report-writer">실적자료 작성</a>
+    {% if current_user.role == 'admin' or current_user.get('manage_all') %}<a href="#global-fcst-panel">해외 FCST</a>{% endif %}
     {% if current_user.role == 'admin' %}<a href="{{ url_for('users') }}">사용자관리</a>{% endif %}
   </nav>
   <div class="userbox">
@@ -46,62 +47,167 @@
     </form>
     <div class="toolbar-actions">
       <a class="btn primary" href="{{ url_for('input_page', year=report.year, month=report.month) }}">실적 입력</a>
+      <a class="btn secondary" href="#detail-table">상세 숫자표</a>
       <a class="btn secondary" href="#report-writer">실적자료 작성</a>
-      {% if current_user.role == 'admin' or current_user.get('manage_all') %}<a class="btn secondary" href="#global-fcst-panel">해외 FCST 연결</a>{% endif %}
-      <a class="btn secondary" target="_blank" href="{{ url_for('report', year=report.year, month=report.month, capture=1) }}">PPT 캡처 화면</a>
+      {% if current_user.role == 'admin' or current_user.get('manage_all') %}<a class="btn secondary" href="#global-fcst-panel">해외 FCST</a>{% endif %}
+      <a class="btn secondary" target="_blank" href="{{ url_for('report', year=report.year, month=report.month, capture=1) }}">PPT 캡처</a>
     </div>
   </section>
 
-  <section class="report-card">
-    <div class="report-title">
-      <div>
+  <section class="meeting-hero">
+    <div class="hero-head">
+      <div class="hero-title">
         <p class="eyebrow">SALES PERFORMANCE MEETING</p>
         <h1>{{ report.year }}년 {{ report.month }}월 실적회의</h1>
-        <p><strong>단위: 백만원</strong> · 저장 원데이터는 원 단위 · 1차 → 2차 → 3차 가마감 → 실제 마감 이력 보존</p>
+        <p>회차 변화와 사업부별 국내·해외 실적을 먼저 보고, 상세 숫자는 아래에서 확인합니다.</p>
       </div>
-      <strong class="medpark-mark">MEDPARK</strong>
+      <div class="hero-badges">
+        <span class="hero-badge">{{ report.month }}월 2차 확인</span>
+        {% if global_fcst_status.connected %}
+          <span class="hero-badge live">Global Maps 연결됨{% if global_fcst_status.row_count is not none %} · {{ global_fcst_status.row_count }}건{% endif %}</span>
+        {% else %}
+          <span class="hero-badge warn">Global Maps 확인 필요</span>
+        {% endif %}
+      </div>
     </div>
 
-    {% if report.comments.top %}
-    <div class="meeting-note top-note">
-      <strong>전체 핵심 요약</strong>
-      <div>{{ report.comments.top | replace('\n','<br>') | safe }}</div>
+    <div class="hero-metrics">
+      <div class="hero-metric">
+        <span>{{ report.month }}월 1차 예상</span>
+        <strong>{{ report.dashboard.first|money_m }}</strong>
+        <small>단위: 백만원</small>
+      </div>
+      <div class="hero-metric primary">
+        <span>{{ report.month }}월 2차 예상</span>
+        <strong>{{ report.dashboard.second|money_m }}</strong>
+        {% if report.dashboard.delta_12 is not none %}
+          <small class="{% if report.dashboard.delta_12 >= 0 %}up{% else %}down{% endif %}">1차 대비 {% if report.dashboard.delta_12 >= 0 %}+{% endif %}{{ report.dashboard.delta_12|money_m }}</small>
+        {% else %}<small>아직 미입력</small>{% endif %}
+      </div>
+      <div class="hero-metric">
+        <span>{{ report.month }}월 3차 예상</span>
+        <strong>{{ report.dashboard.third_forecast|money_m }}</strong>
+        <small>확정 {{ report.dashboard.third_confirmed|money_m }}</small>
+      </div>
+      <div class="hero-metric">
+        <span>{{ report.month }}월 실제 마감</span>
+        <strong>{{ report.dashboard.close|money_m }}</strong>
+        <small>{{ report.close_done }} / 6 파트 완료</small>
+      </div>
+      <div class="hero-metric">
+        <span>{{ report.next_month }}월 1차 예상</span>
+        <strong>{{ report.dashboard.next_first|money_m }}</strong>
+        <small>차월 선행 FCST</small>
+      </div>
     </div>
-    {% endif %}
+  </section>
 
-    <div class="kpi-grid">
-      <div class="kpi"><span>3차 가마감 예상</span><strong>{{ report.third_total|money_m }}</strong></div>
-      <div class="kpi"><span>실제 마감</span><strong>{% if report.close_total is not none %}{{ report.close_total|money_m }}{% else %}입력 진행중{% endif %}</strong><small>{{ report.close_done }} / 6 파트 완료</small></div>
-      <div class="kpi"><span>가마감 대비 차이</span><strong class="{% if report.diff is not none and report.diff < 0 %}negative{% endif %}">{% if report.diff is not none %}{{ report.diff|money_m }}{% else %}-{% endif %}</strong></div>
-      <div class="kpi"><span>오차율</span><strong>{% if report.error_rate is not none %}{{ report.error_rate|pct }}{% else %}-{% endif %}</strong></div>
+  <section class="stage-card">
+    <div class="section-title-row">
+      <div>
+        <h2>회차 진행 흐름</h2>
+        <p>전월 마감 → 당월 1차 → 2차 → 3차 → 마감 → 차월 1차</p>
+      </div>
+      <span class="subaction">현재 {{ report.month }}월 2차 확인</span>
     </div>
+    <div class="stage-flow">
+      <div class="stage-node done"><span class="label">{{ report.prev_month }}월 마감</span><strong>{{ report.dashboard.prev_close|money_m }}</strong><small>전월 실제</small></div>
+      <div class="stage-node done"><span class="label">{{ report.month }}월 1차</span><strong>{{ report.dashboard.first|money_m }}</strong><small>초기 FCST</small></div>
+      <div class="stage-node current"><span class="label">{{ report.month }}월 2차</span><strong>{{ report.dashboard.second|money_m }}</strong><small>현재 회차</small></div>
+      <div class="stage-node {% if report.dashboard.third_forecast is none %}pending{% endif %}"><span class="label">{{ report.month }}월 3차</span><strong>{{ report.dashboard.third_forecast|money_m }}</strong><small>확정 {{ report.dashboard.third_confirmed|money_m }}</small></div>
+      <div class="stage-node {% if report.dashboard.close is none %}pending{% else %}done{% endif %}"><span class="label">{{ report.month }}월 마감</span><strong>{{ report.dashboard.close|money_m }}</strong><small>실제 마감</small></div>
+      <div class="stage-node {% if report.dashboard.next_first is none %}pending{% endif %}"><span class="label">{{ report.next_month }}월 1차</span><strong>{{ report.dashboard.next_first|money_m }}</strong><small>차월 선행</small></div>
+    </div>
+  </section>
+
+  <section class="business-grid">
+    {% for card in report.business_cards %}
+    <article class="business-card">
+      <h3>{{ card.name }}</h3>
+      <div class="business-meta">{{ report.month }}월 2차 기준 · 합계 {{ card.second|money_m }}</div>
+      <div class="business-split">
+        <div class="business-side">
+          <span>국내 · 2차</span>
+          <strong>{{ card.domestic_second|money_m }}</strong>
+          <small>1차 {{ card.domestic_first|money_m }}</small>
+        </div>
+        <div class="business-side overseas">
+          <span>해외 · 2차</span>
+          <strong>{{ card.overseas_second|money_m }}</strong>
+          <small>1차 {{ card.overseas_first|money_m }}</small>
+        </div>
+      </div>
+      <div class="business-foot">
+        <span>1차 → 2차 변화</span>
+        {% if card.delta_12 is not none %}
+          <span class="{% if card.delta_12 >= 0 %}delta-up{% else %}delta-down{% endif %}">{% if card.delta_12 >= 0 %}+{% endif %}{{ card.delta_12|money_m }}</span>
+        {% else %}<span>-</span>{% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </section>
+
+  {% if current_user.role == 'admin' or current_user.get('manage_all') %}
+  <section class="integration-card no-capture" id="global-fcst-panel">
+    <div class="integration-head">
+      <div class="integration-title">
+        <div class="integration-icon">G</div>
+        <div>
+          <h3>Global Maps 해외 FCST</h3>
+          <p>Global Maps는 수정하지 않고 기존 FCST 조회만 사용합니다.</p>
+        </div>
+      </div>
+      {% if global_fcst_status.connected %}<span class="integration-status on">연결됨</span>{% else %}<span class="integration-status off">미연결</span>{% endif %}
+    </div>
+    <div class="integration-body">
+      <div class="integration-summary">
+        <div><span>연결상태</span><strong>{% if global_fcst_status.connected %}정상 연결{% else %}확인 필요{% endif %}</strong></div>
+        <div><span>수신 데이터</span><strong>{% if global_fcst_status.row_count is not none %}{{ global_fcst_status.row_count }}건{% else %}-{% endif %}</strong></div>
+        <div><span>마지막 확인</span><strong>{{ global_fcst_status.checked_at or '-' }}</strong></div>
+        <div><span>인증정보</span><strong>{% if global_fcst_status.saved %}암호화 저장됨{% else %}미저장{% endif %}</strong></div>
+      </div>
+      <form method="post" action="/comments" class="connection-form">
+        <input type="hidden" name="mode" value="global_fcst">
+        <input type="hidden" name="year" value="{{ report.year }}">
+        <input type="hidden" name="month" value="{{ report.month }}">
+        <label>Global Maps ID<input name="global_username" autocomplete="username" placeholder="저장된 정보가 있으면 비워도 됩니다"></label>
+        <label>Global Maps 비밀번호<input type="password" name="global_password" autocomplete="current-password" placeholder="저장된 정보가 있으면 비워도 됩니다"></label>
+        <label style="display:flex;flex-direction:row;align-items:center;gap:7px;font-weight:600"><input type="checkbox" name="save_global" value="1" style="width:auto;min-height:auto"> 연결 성공 시 암호화 저장</label>
+        <div class="connection-actions">
+          <button class="btn primary" name="action" value="test" type="submit">연결 테스트 / 새로고침</button>
+          <button class="btn secondary" name="action" value="delete" type="submit">연결정보 삭제</button>
+        </div>
+      </form>
+      {% if global_fcst_status.message %}<p class="helper">최근 상태: {{ global_fcst_status.message }}</p>{% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="report-card" id="detail-table">
+    <div class="report-title">
+      <div>
+        <p class="eyebrow">DETAIL TABLE</p>
+        <h1>상세 숫자표</h1>
+        <p><strong>단위: 백만원</strong> · 사업부 / 국내·해외 / 기존·신규 / 회차별 비교</p>
+      </div>
+      <strong class="medpark-mark">{{ report.month }}월</strong>
+    </div>
+
+    {% if report.comments.top %}<div class="meeting-note top-note"><strong>전체 핵심 요약</strong><div>{{ report.comments.top | replace('\n','<br>') | safe }}</div></div>{% endif %}
 
     <div class="part-status">
-      {% for p in report.parts %}
-      <span class="{% if p.done %}done{% else %}pending{% endif %}">{{p.name}} · {% if p.done %}마감완료{% else %}마감미입력{% endif %}</span>
-      {% endfor %}
+      {% for p in report.parts %}<span class="{% if p.done %}done{% else %}pending{% endif %}">{{p.name}} · {% if p.done %}마감완료{% else %}마감미입력{% endif %}</span>{% endfor %}
     </div>
 
     <div class="table-scroll">
       <table class="report-table">
         <thead>
           <tr>
-            <th rowspan="2">사업부</th>
-            <th rowspan="2">구분</th>
-            <th rowspan="2">기존/신규</th>
-            <th colspan="2">누계</th>
-            <th rowspan="2">전년 누계</th>
-            <th rowspan="2">증감율</th>
-            <th colspan="{{ report.month - 1 }}">월 실적</th>
-            <th colspan="3">전월 비교</th>
-            <th colspan="5">{{ report.month }}월</th>
-            <th rowspan="2">{{ report.next_month }}월 1차</th>
-            <th rowspan="2">{{ report.quarter }}Q 전망</th>
-            <th rowspan="2">10월</th>
-            <th rowspan="2">11월</th>
-            <th rowspan="2">12월</th>
-            <th rowspan="2">4Q 전망</th>
-            <th rowspan="2">하반기 전망</th>
+            <th rowspan="2">사업부</th><th rowspan="2">구분</th><th rowspan="2">기존/신규</th>
+            <th colspan="2">누계</th><th rowspan="2">전년 누계</th><th rowspan="2">증감율</th>
+            <th colspan="{{ report.month - 1 }}">월 실적</th><th colspan="3">전월 비교</th><th colspan="5">{{ report.month }}월</th>
+            <th rowspan="2">{{ report.next_month }}월 1차</th><th rowspan="2">{{ report.quarter }}Q 전망</th>
+            <th rowspan="2">10월</th><th rowspan="2">11월</th><th rowspan="2">12월</th><th rowspan="2">4Q 전망</th><th rowspan="2">하반기 전망</th>
           </tr>
           <tr>
             <th>합계</th><th>평균</th>
@@ -113,33 +219,12 @@
         <tbody>
           {% for row in report.rows %}
           <tr class="{% if row.is_grand %}grand{% elif row.is_total %}subtotal{% endif %}">
-            {% if row.is_total %}
-              <td colspan="3">{{ row.label }}</td>
-            {% else %}
-              <td>{{ row.business }}</td>
-              <td>{{ row.region }}</td>
-              <td>{{ row.kind }}</td>
-            {% endif %}
-            <td>{{ row.ytd|money_m }}</td>
-            <td>{{ row.avg|money_m }}</td>
-            <td>{{ row.prev_ytd|money_m }}</td>
-            <td>{{ row.growth|pct }}</td>
+            {% if row.is_total %}<td colspan="3">{{ row.label }}</td>{% else %}<td>{{ row.business }}</td><td>{{ row.region }}</td><td>{{ row.kind }}</td>{% endif %}
+            <td>{{ row.ytd|money_m }}</td><td>{{ row.avg|money_m }}</td><td>{{ row.prev_ytd|money_m }}</td><td>{{ row.growth|pct }}</td>
             {% for m in range(1, report.month) %}<td>{{ row.hist.get(m,0)|money_m }}</td>{% endfor %}
-            <td>{{ row.prev_first|money_m }}</td>
-            <td>{{ row.prev_preclose|money_m }}</td>
-            <td>{{ row.prev_close|money_m }}</td>
-            <td>{{ row.first|money_m }}</td>
-            <td>{{ row.second|money_m }}</td>
-            <td class="confirmed">{{ row.third_confirmed|money_m }}</td>
-            <td class="forecast">{{ row.third_forecast|money_m }}</td>
-            <td class="closed">{{ row.close|money_m }}</td>
-            <td>{{ row.next_first|money_m }}</td>
-            <td>{{ row.qproj|money_m }}</td>
-            <td>{{ row.october|money_m }}</td>
-            <td>{{ row.november|money_m }}</td>
-            <td>{{ row.december|money_m }}</td>
-            <td>{{ row.q4proj|money_m }}</td>
-            <td>{{ row.second_half|money_m }}</td>
+            <td>{{ row.prev_first|money_m }}</td><td>{{ row.prev_preclose|money_m }}</td><td>{{ row.prev_close|money_m }}</td>
+            <td>{{ row.first|money_m }}</td><td>{{ row.second|money_m }}</td><td class="confirmed">{{ row.third_confirmed|money_m }}</td><td class="forecast">{{ row.third_forecast|money_m }}</td><td class="closed">{{ row.close|money_m }}</td>
+            <td>{{ row.next_first|money_m }}</td><td>{{ row.qproj|money_m }}</td><td>{{ row.october|money_m }}</td><td>{{ row.november|money_m }}</td><td>{{ row.december|money_m }}</td><td>{{ row.q4proj|money_m }}</td><td>{{ row.second_half|money_m }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -148,125 +233,49 @@
 
     {% if report.has_part_notes %}
     <div class="part-report-section">
-      <div class="part-report-heading">
-        <strong>파트별 실적 코멘트</strong>
-        <span>숫자표와 함께 PPT에 바로 캡처할 수 있는 실적자료</span>
-      </div>
+      <div class="part-report-heading"><strong>파트별 실적 코멘트</strong><span>숫자표와 함께 PPT에 바로 캡처할 수 있는 실적자료</span></div>
       <div class="part-report-grid">
-        {% for note in report.part_notes %}
-          {% if note.has %}
-          <article class="part-report-card">
-            <h3>{{ note.name }}</h3>
-            {% if note.summary %}<div><b>주요 실적·변동</b><p>{{ note.summary | replace('\n','<br>') | safe }}</p></div>{% endif %}
-            {% if note.risk %}<div><b>이월·리스크</b><p>{{ note.risk | replace('\n','<br>') | safe }}</p></div>{% endif %}
-            {% if note.action %}<div><b>다음 액션</b><p>{{ note.action | replace('\n','<br>') | safe }}</p></div>{% endif %}
-          </article>
-          {% endif %}
-        {% endfor %}
+        {% for note in report.part_notes %}{% if note.has %}
+        <article class="part-report-card"><h3>{{ note.name }}</h3>{% if note.summary %}<div><b>주요 실적·변동</b><p>{{ note.summary | replace('\n','<br>') | safe }}</p></div>{% endif %}{% if note.risk %}<div><b>이월·리스크</b><p>{{ note.risk | replace('\n','<br>') | safe }}</p></div>{% endif %}{% if note.action %}<div><b>다음 액션</b><p>{{ note.action | replace('\n','<br>') | safe }}</p></div>{% endif %}</article>
+        {% endif %}{% endfor %}
       </div>
     </div>
     {% endif %}
 
-    {% if report.comments.bottom %}
-    <div class="meeting-note bottom-note">
-      <strong>전체 이월 · 리스크 · 후속조치</strong>
-      <div>{{ report.comments.bottom | replace('\n','<br>') | safe }}</div>
-    </div>
-    {% endif %}
+    {% if report.comments.bottom %}<div class="meeting-note bottom-note"><strong>전체 이월 · 리스크 · 후속조치</strong><div>{{ report.comments.bottom | replace('\n','<br>') | safe }}</div></div>{% endif %}
   </section>
-
-  {% if current_user.role == 'admin' or current_user.get('manage_all') %}
-  <section class="comment-card no-capture" id="global-fcst-panel" style="border:2px solid #0f172a">
-    <div class="section-head report-writer-head">
-      <div>
-        <p class="eyebrow">GLOBAL MAPS LINK</p>
-        <h2>해외 FCST 연결</h2>
-        <p>Global Maps에는 로그인과 FCST 조회(GET)만 수행합니다. 입력·수정·삭제는 하지 않습니다.</p>
-      </div>
-      <span class="notice">{% if global_fcst_status.connected %}연결됨{% if global_fcst_status.row_count is not none %} · {{ global_fcst_status.row_count }}건{% endif %}{% else %}{{ global_fcst_status.message or '미연결' }}{% endif %}</span>
-    </div>
-    <form method="post" action="/comments" class="comment-form report-overall-form">
-      <input type="hidden" name="mode" value="global_fcst">
-      <input type="hidden" name="year" value="{{ report.year }}">
-      <input type="hidden" name="month" value="{{ report.month }}">
-      <label>Global Maps 로그인 ID
-        <input name="global_username" autocomplete="username" placeholder="Global Maps ID">
-      </label>
-      <label>Global Maps 비밀번호
-        <input type="password" name="global_password" autocomplete="current-password" placeholder="저장된 연결정보가 있으면 비워도 됩니다">
-      </label>
-      <label style="display:flex;gap:8px;align-items:center;font-weight:500">
-        <input type="checkbox" name="save_global" value="1" style="width:auto"> 연결 성공 시 공간4에 암호화 저장
-      </label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn primary" name="action" value="test" type="submit">연결 테스트 / 저장</button>
-        <button class="btn secondary" name="action" value="delete" type="submit">저장정보 삭제</button>
-      </div>
-    </form>
-  </section>
-  {% endif %}
 
   <section class="comment-card no-capture" id="report-writer">
     <div class="section-head report-writer-head">
-      <div>
-        <p class="eyebrow">PERFORMANCE REPORT WRITER</p>
-        <h2>실적자료 작성</h2>
-        <p>숫자는 자동 취합됩니다. 담당자는 글만 입력하면 취합본과 PPT 캡처 화면에 바로 반영됩니다.</p>
-      </div>
+      <div><p class="eyebrow">PERFORMANCE REPORT WRITER</p><h2>실적자료 작성</h2><p>숫자는 자동 취합됩니다. 담당자는 글만 입력하면 취합본과 PPT 캡처 화면에 바로 반영됩니다.</p></div>
       <span class="notice">저장 즉시 반영</span>
     </div>
 
     {% if report.can_manage_report %}
     <div class="writer-block overall-writer">
-      <div class="writer-block-title">
-        <strong>전체 실적자료</strong>
-        <span>김홍윤 수석 · 김태현 상무 수정 가능</span>
-      </div>
+      <div class="writer-block-title"><strong>전체 실적자료</strong><span>김홍윤 수석 · 김태현 상무 수정 가능</span></div>
       <form method="post" action="{{ url_for('save_comments') }}" class="comment-form report-overall-form">
-        <input type="hidden" name="mode" value="overall">
-        <input type="hidden" name="year" value="{{ report.year }}">
-        <input type="hidden" name="month" value="{{ report.month }}">
-        <label>전체 핵심 요약
-          <textarea name="top" rows="5" placeholder="예: 9월 가마감 / 전차 대비 / 해외 추가 확정">{{ report.comments.top }}</textarea>
-        </label>
-        <label>전체 이월 · 리스크 · 후속조치
-          <textarea name="bottom" rows="5" placeholder="예: 해외 A건 이월 / 발주확인 / 다음 회의 전 확정">{{ report.comments.bottom }}</textarea>
-        </label>
+        <input type="hidden" name="mode" value="overall"><input type="hidden" name="year" value="{{ report.year }}"><input type="hidden" name="month" value="{{ report.month }}">
+        <label>전체 핵심 요약<textarea name="top" rows="5" placeholder="예: 9월 2차 예상 / 전차 대비 증감 / 해외 추가 확정">{{ report.comments.top }}</textarea></label>
+        <label>전체 이월 · 리스크 · 후속조치<textarea name="bottom" rows="5" placeholder="예: 해외 A건 이월 / 발주확인 / 다음 회의 전 확정">{{ report.comments.bottom }}</textarea></label>
         <button class="btn primary" type="submit">전체 실적자료 저장</button>
       </form>
     </div>
     {% endif %}
 
     <div class="writer-block">
-      <div class="writer-block-title">
-        <strong>파트별 실적자료</strong>
-        <span>{% if report.can_manage_report %}전체 파트 수정 가능{% else %}본인 담당 파트만 작성 가능{% endif %}</span>
-      </div>
+      <div class="writer-block-title"><strong>파트별 실적자료</strong><span>{% if report.can_manage_report %}전체 파트 수정 가능{% else %}본인 담당 파트만 작성 가능{% endif %}</span></div>
       <div class="part-writer-grid">
-        {% for note in report.part_notes %}
-          {% if note.can_edit %}
-          <form method="post" action="{{ url_for('save_comments') }}" class="part-writer-card">
-            <input type="hidden" name="mode" value="part">
-            <input type="hidden" name="year" value="{{ report.year }}">
-            <input type="hidden" name="month" value="{{ report.month }}">
-            <input type="hidden" name="scope" value="{{ note.key }}">
-            <div class="part-writer-title">
-              <strong>{{ note.name }}</strong>
-              {% if note.updated_by %}<small>최근 저장: {{ note.updated_by }} · {{ note.updated_at }}</small>{% endif %}
-            </div>
-            <label>주요 실적·변동
-              <textarea name="summary" rows="4" placeholder="예: A거래처 확정 / B건 추가 추진">{{ note.summary }}</textarea>
-            </label>
-            <label>이월·리스크
-              <textarea name="risk" rows="3" placeholder="예: 발주 일정 지연으로 차월 이월 가능성">{{ note.risk }}</textarea>
-            </label>
-            <label>다음 액션
-              <textarea name="action" rows="3" placeholder="예: 발주 확정 / 신규 거래처 FCST 반영">{{ note.action }}</textarea>
-            </label>
-            <button class="btn primary" type="submit">{{ note.name }} 저장</button>
-          </form>
-          {% endif %}
-        {% endfor %}
+        {% for note in report.part_notes %}{% if note.can_edit %}
+        <form method="post" action="{{ url_for('save_comments') }}" class="part-writer-card">
+          <input type="hidden" name="mode" value="part"><input type="hidden" name="year" value="{{ report.year }}"><input type="hidden" name="month" value="{{ report.month }}"><input type="hidden" name="scope" value="{{ note.key }}">
+          <div class="part-writer-title"><strong>{{ note.name }}</strong>{% if note.updated_by %}<small>최근 저장: {{ note.updated_by }} · {{ note.updated_at }}</small>{% endif %}</div>
+          <label>주요 실적·변동<textarea name="summary" rows="4" placeholder="예: A거래처 확정 / B건 추가 추진">{{ note.summary }}</textarea></label>
+          <label>이월·리스크<textarea name="risk" rows="3" placeholder="예: 발주 일정 지연으로 차월 이월 가능성">{{ note.risk }}</textarea></label>
+          <label>다음 액션<textarea name="action" rows="3" placeholder="예: 발주 확정 / 신규 거래처 FCST 반영">{{ note.action }}</textarea></label>
+          <button class="btn primary" type="submit">{{ note.name }} 저장</button>
+        </form>
+        {% endif %}{% endfor %}
       </div>
     </div>
   </section>
