@@ -5,7 +5,7 @@ import fcst_entry as fcst
 base = fcst.base
 app = fcst.app
 
-# 기존 2025 전년대비 기준값 보강은 유지하되, 실패해도 운영 앱을 종료시키지 않는다.
+# 기존 2025 전년대비 기준값 보강은 있으면 사용하되, 실패해도 운영 앱을 종료시키지 않는다.
 try:
     audit = runpy.run_path("gunicorn.conf.py")
     seed_func = audit.get("_seed_data")
@@ -42,6 +42,11 @@ except Exception:
 
 
 _original_report_data = base.report_data
+
+
+def _sum_rows(rows, field):
+    values = [r.get(field) for r in rows if r.get(field) is not None]
+    return sum(values) if values else None
 
 
 def report_data_runtime(year, month):
@@ -85,6 +90,48 @@ def report_data_runtime(year, month):
     report["part_notes"] = part_notes
     report["has_part_notes"] = any_part_notes
     report["can_manage_report"] = manage_all
+
+    # 화면 첫 단에서 바로 볼 회차/사업부 요약을 백엔드에서 계산한다.
+    grand = next((r for r in report.get("rows", []) if r.get("is_grand")), {})
+    report["dashboard"] = {
+        "prev_close": grand.get("prev_close"),
+        "first": grand.get("first"),
+        "second": grand.get("second"),
+        "third_confirmed": grand.get("third_confirmed"),
+        "third_forecast": grand.get("third_forecast"),
+        "close": grand.get("close"),
+        "next_first": grand.get("next_first"),
+        "delta_12": (
+            grand.get("second") - grand.get("first")
+            if grand.get("second") is not None and grand.get("first") is not None
+            else None
+        ),
+    }
+
+    business_cards = []
+    details = report.get("details", [])
+    for business in base.BUSINESSES:
+        business_rows = [r for r in details if r.get("business") == business]
+        domestic_rows = [r for r in business_rows if r.get("region") == "국내"]
+        overseas_rows = [r for r in business_rows if r.get("region") == "해외"]
+        first_total = _sum_rows(business_rows, "first")
+        second_total = _sum_rows(business_rows, "second")
+        business_cards.append({
+            "name": business,
+            "first": first_total,
+            "second": second_total,
+            "third": _sum_rows(business_rows, "third_forecast"),
+            "domestic_second": _sum_rows(domestic_rows, "second"),
+            "overseas_second": _sum_rows(overseas_rows, "second"),
+            "domestic_first": _sum_rows(domestic_rows, "first"),
+            "overseas_first": _sum_rows(overseas_rows, "first"),
+            "delta_12": (
+                second_total - first_total
+                if second_total is not None and first_total is not None
+                else None
+            ),
+        })
+    report["business_cards"] = business_cards
     return report
 
 
@@ -162,7 +209,7 @@ def health_production():
             "entries": len(data.get("entries", [])),
             "actuals": len(data.get("actuals", {})),
             "seed_version": data.get("meta", {}).get("seed_version", ""),
-            "production_entry": "v1",
+            "production_entry": "v2-dashboard",
             "global_fcst": fcst.load_fcst_status(),
         })
     except Exception:
@@ -173,4 +220,4 @@ def health_production():
 
 app.view_functions["health"] = health_production
 
-print("Production entry loaded: report writer, September default and Global FCST bridge active.")
+print("Production entry loaded: dashboard summaries, September default and Global FCST bridge active.")
