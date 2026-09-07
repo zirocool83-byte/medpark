@@ -14,6 +14,7 @@
     <a class="active" href="{{ url_for('report', year=report.year, month=report.month) }}">취합본</a>
     <a href="{{ url_for('input_page', year=report.year, month=report.month) }}">실적입력</a>
     <a href="{{ url_for('report', year=report.year, month=report.month) }}#report-writer">실적자료 작성</a>
+    {% if current_user.role == 'admin' or current_user.get('manage_all') %}<a href="#global-fcst-panel">해외 FCST 연결</a>{% endif %}
     {% if current_user.role == 'admin' %}<a href="{{ url_for('users') }}">사용자관리</a>{% endif %}
   </nav>
   <div class="userbox">
@@ -45,6 +46,7 @@
     <div class="toolbar-actions">
       <a class="btn primary" href="{{ url_for('input_page', year=report.year, month=report.month) }}">실적 입력</a>
       <a class="btn secondary" href="#report-writer">실적자료 작성</a>
+      {% if current_user.role == 'admin' or current_user.get('manage_all') %}<a class="btn secondary" href="#global-fcst-panel">해외 FCST 연결</a>{% endif %}
       <a class="btn secondary" target="_blank" href="{{ url_for('report', year=report.year, month=report.month, capture=1) }}">PPT 캡처 화면</a>
     </div>
   </section>
@@ -171,6 +173,37 @@
     </div>
     {% endif %}
   </section>
+
+  {% if current_user.role == 'admin' or current_user.get('manage_all') %}
+  <section class="comment-card no-capture" id="global-fcst-panel" style="border:2px solid #0f172a">
+    <div class="section-head report-writer-head">
+      <div>
+        <p class="eyebrow">GLOBAL MAPS LINK</p>
+        <h2>해외 FCST 연결</h2>
+        <p>Global Maps에는 로그인과 FCST 조회(GET)만 수행합니다. 입력·수정·삭제는 하지 않습니다.</p>
+      </div>
+      <span class="notice">읽기 전용</span>
+    </div>
+    <form method="post" action="/comments" class="comment-form report-overall-form">
+      <input type="hidden" name="mode" value="global_fcst">
+      <input type="hidden" name="year" value="{{ report.year }}">
+      <input type="hidden" name="month" value="{{ report.month }}">
+      <label>Global Maps 로그인 ID
+        <input name="global_username" autocomplete="username" placeholder="Global Maps ID">
+      </label>
+      <label>Global Maps 비밀번호
+        <input type="password" name="global_password" autocomplete="current-password" placeholder="저장된 연결정보가 있으면 비워도 됩니다">
+      </label>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:500">
+        <input type="checkbox" name="save_global" value="1" style="width:auto"> 연결 성공 시 공간4에 암호화 저장
+      </label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn primary" name="action" value="test" type="submit">연결 테스트 / 저장</button>
+        <button class="btn secondary" name="action" value="delete" type="submit">저장정보 삭제</button>
+      </div>
+    </form>
+  </section>
+  {% endif %}
 
   <section class="comment-card no-capture" id="report-writer">
     <div class="section-head report-writer-head">
