@@ -59,3 +59,5 @@ if os.environ.get('RUN_SELFTEST') == '1':
         results['numbers'][name] = {'ok': ok, 'actual': actual, 'expected': expected}
         results['all_ok'] = results['all_ok'] and ok
     print('SELFTEST_RESULT=' + json.dumps(results, ensure_ascii=False, sort_keys=True))
+    if not results['all_ok']:
+        raise RuntimeError('SELFTEST_FAILED: ' + json.dumps(results, ensure_ascii=False, sort_keys=True))
