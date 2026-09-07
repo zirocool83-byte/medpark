@@ -9,24 +9,37 @@ import threading
 import uuid
 from datetime import datetime
 from functools import wraps
+import secrets
 
 from flask import Flask, flash, redirect, render_template, request, session, url_for, jsonify
 from werkzeug.security import check_password_hash, generate_password_hash
-
-app = Flask(__name__)
-app.secret_key = os.environ.get("APP_SECRET_KEY", "medpark-performance-local")
-app.config.update(
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=False,
-)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("DATA_DIR", "/app/user_data")
 os.makedirs(DATA_DIR, exist_ok=True)
 DATA_FILE = os.path.join(DATA_DIR, "performance_data.json")
 BOOTSTRAP_FILE = os.path.join(BASE_DIR, "bootstrap.enc")
+SECRET_FILE = os.path.join(DATA_DIR, ".session_secret")
 LOCK = threading.RLock()
+
+def load_session_secret():
+    configured = os.environ.get("APP_SECRET_KEY", "").strip()
+    if configured:
+        return configured
+    if os.path.exists(SECRET_FILE):
+        return open(SECRET_FILE, "r", encoding="utf-8").read().strip()
+    value = secrets.token_urlsafe(48)
+    with open(SECRET_FILE, "w", encoding="utf-8") as f:
+        f.write(value)
+    return value
+
+app = Flask(__name__)
+app.secret_key = load_session_secret()
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=True,
+)
 
 BUSINESSES = ["덴탈", "메디컬", "에스테틱"]
 REGIONS = ["국내", "해외"]
