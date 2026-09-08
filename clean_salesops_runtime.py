@@ -5,6 +5,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 import ppt_highlight_patch as ph
 from flask import make_response, request
@@ -18,6 +19,7 @@ SALESOPS_API = "https://" + SALESOPS_HOST + "/api/performance"
 TOKEN_ENV = "PERFORMANCE_READ_ONLY_TOKEN"
 _CACHE = {}
 _CACHE_TTL = 20
+SNAPSHOT_DIR = Path(base.DATA_DIR)
 
 
 def _norm(v):
@@ -126,6 +128,61 @@ def _parse_row(row):
     return {"business":business,"region":region,"kind":kind,"first":first,"second":second,"close":close}
 
 
+def _snapshot_path(year, month):
+    return SNAPSHOT_DIR / f"salesops_readonly_snapshot_{int(year)}_{int(month):02d}.json"
+
+
+def _save_snapshot(year, month, index):
+    payload = {
+        "year": int(year),
+        "month": int(month),
+        "saved_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "rows": {"|".join(key): value for key, value in index.items()},
+    }
+    path = _snapshot_path(year, month)
+    tmp = str(path) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+        f.flush(); os.fsync(f.fileno())
+    os.replace(tmp, path)
+
+
+def _load_snapshot(year, month):
+    path = _snapshot_path(year, month)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        rows = payload.get("rows", {}) if isinstance(payload, dict) else {}
+        index = {}
+        for key, value in rows.items():
+            parts = str(key).split("|", 2)
+            if len(parts) == 3 and isinstance(value, dict):
+                index[(parts[0], parts[1], parts[2])] = value
+        if index:
+            return index, payload.get("saved_at")
+    except Exception:
+        pass
+    return {}, None
+
+
+def _fallback(year, month, reason, now):
+    cached, saved_at = _load_snapshot(year, month)
+    if cached:
+        meta = {
+            "ok": True,
+            "reason": "snapshot_fallback",
+            "warning": reason,
+            "source": "snapshot",
+            "saved_at": saved_at,
+            "rows": len(cached),
+        }
+        _CACHE[(int(year), int(month))] = (now, cached, meta)
+        return cached, meta
+    meta = {"ok":False,"reason":reason,"source":"live","rows":0}
+    _CACHE[(int(year), int(month))] = (now, {}, meta)
+    return {}, meta
+
+
 def _fetch(year, month, force=False):
     key = (int(year), int(month))
     now = time.time()
@@ -133,32 +190,32 @@ def _fetch(year, month, force=False):
         ts, data, meta = _CACHE[key]
         if now - ts < _CACHE_TTL:
             return data, meta
+
     token = os.environ.get(TOKEN_ENV, "").strip()
     if not token:
-        return {}, {"ok":False,"reason":"token_missing","rows":0}
+        return _fallback(year, month, "token_missing", now)
+
     url = SALESOPS_API + "?" + urllib.parse.urlencode({"year":int(year),"month":int(month)})
     headers = {
         "Accept":"application/json",
-        "User-Agent":"MedPark-Performance-Report/clean-1.3",
+        "User-Agent":"MedPark-Performance-Report/clean-2.0",
         "X-Requested-With":"XMLHttpRequest",
         "Authorization":"Bearer " + token,
         "X-Forwarded-Proto":"https",
         "X-Forwarded-Host":SALESOPS_HOST,
     }
     req = urllib.request.Request(url, headers=headers, method="GET")
+
     try:
         with urllib.request.urlopen(req, timeout=8) as res:
             raw = res.read().decode("utf-8", "replace")
             status = getattr(res, "status", 200)
             ctype = str(res.headers.get("Content-Type") or "").lower()
         if status != 200:
-            meta = {"ok":False,"reason":"http_"+str(status),"rows":0}
-            _CACHE[key] = (now, {}, meta)
-            return {}, meta
+            return _fallback(year, month, "http_" + str(status), now)
         if "json" not in ctype and not raw.lstrip().startswith(("{", "[")):
-            meta = {"ok":False,"reason":"non_json_response","rows":0}
-            _CACHE[key] = (now, {}, meta)
-            return {}, meta
+            return _fallback(year, month, "non_json_response", now)
+
         payload = json.loads(raw)
         rows = _extract_rows(payload)
         index = {}
@@ -166,19 +223,24 @@ def _fetch(year, month, force=False):
             parsed = _parse_row(item)
             if parsed:
                 index[(parsed["business"],parsed["region"],parsed["kind"])] = parsed
-        meta = {"ok":len(index) > 0,"reason":"ok" if index else "no_parsed_rows","rows":len(index)}
+        if not index:
+            return _fallback(year, month, "no_parsed_rows", now)
+
+        meta = {"ok":True,"reason":"ok","source":"live","rows":len(index)}
         _CACHE[key] = (now, index, meta)
+        try:
+            _save_snapshot(year, month, index)
+        except Exception:
+            pass
         return index, meta
     except urllib.error.HTTPError as exc:
-        meta = {"ok":False,"reason":"http_"+str(exc.code),"rows":0}
+        return _fallback(year, month, "http_" + str(exc.code), now)
     except urllib.error.URLError as exc:
-        meta = {"ok":False,"reason":"URLError:"+str(getattr(exc,"reason",exc))[:120],"rows":0}
+        return _fallback(year, month, "URLError:" + str(getattr(exc,"reason",exc))[:120], now)
     except json.JSONDecodeError:
-        meta = {"ok":False,"reason":"invalid_json","rows":0}
+        return _fallback(year, month, "invalid_json", now)
     except Exception as exc:
-        meta = {"ok":False,"reason":type(exc).__name__+":"+str(exc)[:120],"rows":0}
-    _CACHE[key] = (now, {}, meta)
-    return {}, meta
+        return _fallback(year, month, type(exc).__name__ + ":" + str(exc)[:120], now)
 
 
 def _sum(rows, field):
@@ -192,6 +254,7 @@ def _report(year, month):
     cur, cur_meta = _fetch(year, month, True)
     prev_year, prev_month = ((year-1, 12) if month == 1 else (year, month-1))
     prev, prev_meta = _fetch(prev_year, prev_month, True)
+
     for row in details:
         if row.get("region") != "국내":
             continue
@@ -204,12 +267,15 @@ def _report(year, month):
             row["close"] = c["close"]
             row["close_has"] = True
         if p.get("close") is not None: row["prev_close"] = p["close"]
+
     sum_fields = ("prev_close","first","second","third_confirmed","third_forecast","close","next_first","carryover","qproj","october","november","december","q4proj","second_half")
     totals = [r for r in report.get("rows", []) if r.get("is_total")]
     for total in totals:
         source = details if total.get("is_grand") else [r for r in details if r.get("business") == total.get("business")]
-        for field in sum_fields: total[field] = _sum(source, field)
+        for field in sum_fields:
+            total[field] = _sum(source, field)
         total["close_has"] = bool(source) and all(r.get("close_has") for r in source)
+
     domestic = [r for r in details if r.get("region") == "국내"]
     report["clean_salesops"] = {
         "current":cur_meta,
@@ -223,12 +289,16 @@ def _report(year, month):
 
 def _status_banner(report):
     meta = report.get("clean_salesops", {})
-    ok = meta.get("current", {}).get("ok") and meta.get("previous", {}).get("ok") and meta.get("domestic_rows") == 6
+    current = meta.get("current", {})
+    previous = meta.get("previous", {})
+    ok = current.get("ok") and previous.get("ok") and meta.get("domestic_rows") == 6
     if ok:
         prev_txt = ui.money_m(meta.get("prev_close_total"))
         second_txt = ui.money_m(meta.get("second_total"))
-        return f"<div style='margin:8px 0 10px;padding:9px 12px;border:1px solid #91c8a7;background:#f1faf4;border-radius:7px;font-size:12px'><b>SalesOps 국내연동 OK</b> · 8월 잠정마감 {prev_txt}백만원 · 9월 2차 {second_txt}백만원</div>"
-    reason = meta.get("current", {}).get("reason") or meta.get("previous", {}).get("reason") or "unknown"
+        cached = current.get("source") == "snapshot" or previous.get("source") == "snapshot"
+        suffix = " · 최근 정상 API값 사용" if cached else ""
+        return f"<div style='margin:8px 0 10px;padding:9px 12px;border:1px solid #91c8a7;background:#f1faf4;border-radius:7px;font-size:12px'><b>SalesOps 국내연동 OK</b> · 8월 잠정마감 {prev_txt}백만원 · 9월 2차 {second_txt}백만원{suffix}</div>"
+    reason = current.get("reason") or previous.get("reason") or "unknown"
     return f"<div style='margin:8px 0 10px;padding:9px 12px;border:1px solid #d89c9c;background:#fff4f4;border-radius:7px;font-size:12px'><b>국내 API 연동 실패</b> · {ui.esc(reason)}</div>"
 
 
@@ -247,7 +317,7 @@ def clean_dashboard():
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
-    resp.headers["X-MedPark-Runtime"] = "clean-salesops-1.3"
+    resp.headers["X-MedPark-Runtime"] = "clean-salesops-2.0"
     return resp
 app.view_functions["dashboard"] = clean_dashboard
 
@@ -262,9 +332,11 @@ def clean_health():
     prev_domestic = [prev.get(key) or {} for key in keys]
     payload = dict(payload)
     payload.update({
-        "runtime":"clean-salesops-1.3",
+        "runtime":"clean-salesops-2.0",
         "salesops_current_ok":bool(cm.get("ok")),
         "salesops_previous_ok":bool(pm.get("ok")),
+        "salesops_current_source":cm.get("source"),
+        "salesops_previous_source":pm.get("source"),
         "salesops_current_reason":cm.get("reason"),
         "salesops_previous_reason":pm.get("reason"),
         "salesops_domestic_rows":sum(1 for key in keys if key in cur),
