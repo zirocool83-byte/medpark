@@ -21,7 +21,7 @@ def probe(path):
     url = "https://" + HOST + path + "?" + urllib.parse.urlencode({"year":2026,"month":9})
     headers = {
         "Accept":"application/json",
-        "User-Agent":"MedPark-PathProbe/1.0",
+        "User-Agent":"MedPark-PathProbe/1.1",
         "X-Requested-With":"XMLHttpRequest",
         "Authorization":"Bearer " + token,
         "X-Forwarded-Proto":"https",
@@ -43,4 +43,6 @@ def probe(path):
 def salesops_path_probe():
     a = probe('/api/performance')
     b = probe('/api/performance/')
-    return jsonify({"no_slash":a,"with_slash":b}), 200
+    winner = 'no_slash' if a.get('status') == 200 and a.get('json') else ('with_slash' if b.get('status') == 200 and b.get('json') else 'none')
+    localhost_redirect = any('127.0.0.1' in str(x.get('location') or '') or 'localhost' in str(x.get('location') or '') for x in (a,b))
+    return jsonify({"winner":winner,"localhost_redirect":localhost_redirect,"no_slash":a,"with_slash":b}), 200
