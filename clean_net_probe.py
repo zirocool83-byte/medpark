@@ -17,7 +17,7 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def probe(url, headers=None, no_redirect=False):
-    req = urllib.request.Request(url, headers={"User-Agent":"MedPark-NetProbe/2.0", **(headers or {})}, method="GET")
+    req = urllib.request.Request(url, headers={"User-Agent":"MedPark-NetProbe/3.0", **(headers or {})}, method="GET")
     opener = urllib.request.build_opener(NoRedirect) if no_redirect else urllib.request.build_opener()
     try:
         with opener.open(req, timeout=5) as res:
@@ -27,6 +27,7 @@ def probe(url, headers=None, no_redirect=False):
                 "status": getattr(res, "status", 200),
                 "content_type": res.headers.get("Content-Type"),
                 "location": res.headers.get("Location"),
+                "final_url": res.geturl(),
                 "body_prefix": body[:180],
             }
     except urllib.error.HTTPError as exc:
@@ -40,6 +41,7 @@ def probe(url, headers=None, no_redirect=False):
             "status": exc.code,
             "content_type": exc.headers.get("Content-Type"),
             "location": exc.headers.get("Location"),
+            "final_url": getattr(exc, 'url', None),
             "body_prefix": body[:180],
         }
     except urllib.error.URLError as exc:
@@ -65,5 +67,4 @@ def clean_net_probe():
         "api_auth_redirect": probe(api, auth_headers, no_redirect=False),
         "api_auth_noredirect": probe(api, auth_headers, no_redirect=True),
     }
-    winner = next((name for name, result in results.items() if name.startswith('api_auth') and result.get('ok') and result.get('status') == 200 and 'json' in str(result.get('content_type') or '').lower()), None)
-    return jsonify({"winner": winner, "token_configured": bool(token), "results": results}), 200
+    return jsonify({"token_configured": bool(token), "results": results}), 200
