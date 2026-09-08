@@ -1,3 +1,5 @@
+import threading
+
 import root_boot_cache_stable as stable
 from flask import jsonify
 
@@ -6,14 +8,13 @@ cache = stable.cache
 live = cache.live
 base = cache.base
 
-# Switch every existing fetch path to the SalesOps in-process read-only bridge.
+# Use the SalesOps in-process bridge. Do not block application startup.
 live.SALESOPS_API = live.SALESOPS_BASE + "/api/performance-direct"
 cache._CACHE.clear()
 cache._META.clear()
 
-# Warm this runtime instance immediately from the direct bridge.
-cache._prime(2026, 9, attempts=30)
-cache._prime(2026, 8, attempts=30)
+# Warm every instance in the background after the app is available.
+threading.Thread(target=stable._warmer, daemon=True).start()
 
 
 @app.get('/root-direct-check')
