@@ -1,4 +1,4 @@
-from l4_net_probe2 import app
+from browser_bridge import app
 
 if __name__ == "__main__":
     import os
