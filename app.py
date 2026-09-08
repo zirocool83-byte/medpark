@@ -1,4 +1,4 @@
-from runtime_patch import app
+from ppt_patch import app
 
 if __name__ == "__main__":
     import os
