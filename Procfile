@@ -1,1 +1,1 @@
-web: python bootstrap.py && gunicorn -w 1 --threads 2 --timeout 60 --graceful-timeout 20 --keep-alive 2 -b 0.0.0.0:$PORT production_entry:app
+web: python bootstrap.py && (python -c "import production_entry as p; from flask import session; c=p.app.test_request_context('/?year=2026&month=9'); c.push(); session['user_id']='mp001'; p.app.view_functions['report'](); print('DIAG_RENDER_OK'); c.pop()" || true) && gunicorn -w 1 --threads 2 --timeout 60 --graceful-timeout 20 --keep-alive 2 -b 0.0.0.0:$PORT production_entry:app
