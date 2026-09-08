@@ -1,8 +1,12 @@
-# Production runtime is configured in production_entry.py.
-# Keep this file intentionally minimal because Gunicorn auto-loads gunicorn.conf.py
-# from the project root even when -c is not specified.
-# Do not place data-count assertions or request-time hard failures here.
+# Stable Gunicorn runtime for Cafe24 AI Space.
+# Keep this config minimal and valid. Bind address is supplied by Procfile.
 
-bind = None
 workers = 1
-threads = 4
+threads = 2
+timeout = 60
+graceful_timeout = 20
+keepalive = 2
+accesslog = "-"
+errorlog = "-"
+capture_output = True
+loglevel = "info"
