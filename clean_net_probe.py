@@ -17,54 +17,31 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def probe(url, headers=None, no_redirect=False):
-    req = urllib.request.Request(url, headers={"User-Agent":"MedPark-NetProbe/3.0", **(headers or {})}, method="GET")
+    req = urllib.request.Request(url, headers={"User-Agent":"MedPark-NetProbe/4.0", **(headers or {})}, method="GET")
     opener = urllib.request.build_opener(NoRedirect) if no_redirect else urllib.request.build_opener()
     try:
         with opener.open(req, timeout=5) as res:
             body = res.read(240).decode("utf-8", "replace")
-            return {
-                "ok": True,
-                "status": getattr(res, "status", 200),
-                "content_type": res.headers.get("Content-Type"),
-                "location": res.headers.get("Location"),
-                "final_url": res.geturl(),
-                "body_prefix": body[:180],
-            }
+            return {"ok":True,"status":getattr(res,"status",200),"content_type":res.headers.get("Content-Type"),"location":res.headers.get("Location"),"final_url":res.geturl(),"body_prefix":body[:180]}
     except urllib.error.HTTPError as exc:
-        try:
-            body = exc.read(240).decode("utf-8", "replace")
-        except Exception:
-            body = ""
-        return {
-            "ok": False,
-            "kind": "HTTPError",
-            "status": exc.code,
-            "content_type": exc.headers.get("Content-Type"),
-            "location": exc.headers.get("Location"),
-            "final_url": getattr(exc, 'url', None),
-            "body_prefix": body[:180],
-        }
+        try: body=exc.read(240).decode("utf-8","replace")
+        except Exception: body=""
+        return {"ok":False,"kind":"HTTPError","status":exc.code,"content_type":exc.headers.get("Content-Type"),"location":exc.headers.get("Location"),"final_url":getattr(exc,'url',None),"body_prefix":body[:180]}
     except urllib.error.URLError as exc:
-        return {"ok": False, "kind":"URLError", "detail": str(getattr(exc, "reason", exc))[:240]}
+        return {"ok":False,"kind":"URLError","detail":str(getattr(exc,"reason",exc))[:240]}
     except Exception as exc:
-        return {"ok": False, "kind": type(exc).__name__, "detail": str(exc)[:240]}
-
+        return {"ok":False,"kind":type(exc).__name__,"detail":str(exc)[:240]}
 
 @app.get('/clean-net-probe')
 def clean_net_probe():
-    token = os.environ.get(TOKEN_ENV, "").strip()
-    q = urllib.parse.urlencode({"year":2026,"month":9})
-    api = BASE + "/api/performance?" + q
-    auth_headers = {
-        "Accept":"application/json",
-        "X-Requested-With":"XMLHttpRequest",
-        "Authorization":"Bearer " + token,
-    } if token else {"Accept":"application/json", "X-Requested-With":"XMLHttpRequest"}
-    results = {
-        "health": probe(BASE + "/health"),
-        "api_noauth_redirect": probe(api, {"Accept":"application/json"}, no_redirect=False),
-        "api_noauth_noredirect": probe(api, {"Accept":"application/json"}, no_redirect=True),
-        "api_auth_redirect": probe(api, auth_headers, no_redirect=False),
-        "api_auth_noredirect": probe(api, auth_headers, no_redirect=True),
+    token=os.environ.get(TOKEN_ENV,"").strip()
+    q=urllib.parse.urlencode({"year":2026,"month":9})
+    api=BASE+"/api/performance?"+q
+    base_auth={"Accept":"application/json","X-Requested-With":"XMLHttpRequest","Authorization":"Bearer "+token} if token else {"Accept":"application/json","X-Requested-With":"XMLHttpRequest"}
+    forwarded={**base_auth,"X-Forwarded-Proto":"https","X-Forwarded-Host":"medparkallo-medpark-salesops.mycafe24.ai"}
+    results={
+        "api_auth_noredirect":probe(api,base_auth,True),
+        "api_auth_forwarded_noredirect":probe(api,forwarded,True),
+        "api_auth_forwarded_redirect":probe(api,forwarded,False),
     }
-    return jsonify({"token_configured": bool(token), "results": results}), 200
+    return jsonify({"token_configured":bool(token),"results":results}),200
