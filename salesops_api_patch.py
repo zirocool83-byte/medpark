@@ -293,6 +293,18 @@ def salesops_health():
     payload = {"status":"ok" if meta.get("ok") else "error","connected":bool(meta.get("ok")),"year":year,"month":month,"raw_rows":meta.get("raw_rows",0),"parsed_rows":meta.get("parsed_rows",0),"auth":meta.get("auth"),"reason":meta.get("reason"),"token_configured":bool(os.environ.get(TOKEN_ENV,"").strip()),"mode":"read-only"}
     return payload, (200 if meta.get("ok") else 503)
 
+@app.get("/salesops-diagnostic-code")
+def salesops_diagnostic_code():
+    try:
+        year = int(request.args.get("year",2026)); month = int(request.args.get("month",9))
+    except Exception:
+        year, month = 2026, 9
+    _, meta = _fetch_remote(year, month, force=True)
+    reason = str(meta.get("reason") or "request_failed")
+    codes = {"ok":201,"token_missing":202,"no_parsed_rows":203,"http_401":204,"http_403":205,"http_404":206,"http_500":207,"http_502":208,"http_503":209,"TimeoutError":210,"URLError":211,"JSONDecodeError":212,"request_failed":213}
+    code = codes.get(reason, 218)
+    return {"status":"ok" if meta.get("ok") else "error","reason":reason,"raw_rows":meta.get("raw_rows",0),"parsed_rows":meta.get("parsed_rows",0)}, code
+
 _original_health = app.view_functions.get("health")
 def salesops_health_wrapper():
     payload = _original_health() if _original_health else {"status":"ok"}
