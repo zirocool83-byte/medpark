@@ -1,4 +1,4 @@
-from clean_salesops_runtime import app
+from clean_net_probe import app
 
 if __name__ == "__main__":
     import os
