@@ -1,4 +1,4 @@
-from salesops_local_mirror import app
+from root_force_live import app
 
 if __name__ == "__main__":
     import os
