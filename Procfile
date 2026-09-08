@@ -1,1 +1,1 @@
-web: gunicorn -c gunicorn.conf.py -w 1 --threads 2 --timeout 60 --graceful-timeout 20 --keep-alive 2 -b 0.0.0.0:$PORT production_entry:app
+web: python -c "import os; from production_entry import app; app.run(host='0.0.0.0', port=int(os.environ.get('PORT','8000')), debug=False, use_reloader=False)"
