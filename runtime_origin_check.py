@@ -4,6 +4,7 @@ from flask import jsonify
 app = rt.app
 ui = rt.ui
 core = rt.core
+resilient = rt.resilient
 base = rt.base
 
 
@@ -61,3 +62,21 @@ def snap_second6():
 @app.get('/snap-close6')
 def snap_close6():
     s=_snap_state(); return jsonify(s), (200 if s['prev_close_non_null']==6 else 409)
+
+@app.get('/snap-rebuild')
+def snap_rebuild():
+    results = {}
+    for year, month, label in [(2026, 9, 'sep'), (2026, 8, 'aug')]:
+        try:
+            data, meta = resilient._original_fetch(year, month, True)
+        except Exception as exc:
+            data, meta = {}, {'ok':False, 'reason':type(exc).__name__}
+        results[label] = {'ok':bool(meta.get('ok')), 'reason':meta.get('reason'), 'rows':len(data)}
+        if meta.get('ok') and data:
+            try:
+                core._save_snapshot(year, month, data)
+            except Exception as exc:
+                results[label]['save_error'] = type(exc).__name__
+    state = _snap_state()
+    ok = state['current_rows'] == 6 and state['previous_rows'] == 6 and state['second_non_null'] == 6 and state['second_total'] == 797318256 and state['prev_close_non_null'] == 6
+    return jsonify({'status':'ok' if ok else 'not_ready', 'fetch':results, **state}), (200 if ok else 409)
