@@ -1,4 +1,4 @@
-from domestic_api_diag import app
+from domestic_api_redirect_diag import app
 
 if __name__ == "__main__":
     import os
