@@ -139,7 +139,7 @@ def _fetch(year, month, force=False):
     url = SALESOPS_API + "?" + urllib.parse.urlencode({"year":int(year),"month":int(month)})
     headers = {
         "Accept":"application/json",
-        "User-Agent":"MedPark-Performance-Report/clean-1.2",
+        "User-Agent":"MedPark-Performance-Report/clean-1.3",
         "X-Requested-With":"XMLHttpRequest",
         "Authorization":"Bearer " + token,
         "X-Forwarded-Proto":"https",
@@ -247,7 +247,7 @@ def clean_dashboard():
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
-    resp.headers["X-MedPark-Runtime"] = "clean-salesops-1.2"
+    resp.headers["X-MedPark-Runtime"] = "clean-salesops-1.3"
     return resp
 app.view_functions["dashboard"] = clean_dashboard
 
@@ -258,15 +258,21 @@ def clean_health():
     cur, cm = _fetch(2026, 9, True)
     prev, pm = _fetch(2026, 8, True)
     keys = [(b,"국내",k) for b in base.BUSINESSES for k in base.KINDS]
+    cur_domestic = [cur.get(key) or {} for key in keys]
+    prev_domestic = [prev.get(key) or {} for key in keys]
     payload = dict(payload)
     payload.update({
-        "runtime":"clean-salesops-1.2",
+        "runtime":"clean-salesops-1.3",
         "salesops_current_ok":bool(cm.get("ok")),
         "salesops_previous_ok":bool(pm.get("ok")),
         "salesops_current_reason":cm.get("reason"),
         "salesops_previous_reason":pm.get("reason"),
         "salesops_domestic_rows":sum(1 for key in keys if key in cur),
         "salesops_prev_domestic_rows":sum(1 for key in keys if key in prev),
+        "salesops_second_non_null":sum(1 for r in cur_domestic if r.get("second") is not None),
+        "salesops_second_total":sum(r.get("second") for r in cur_domestic if r.get("second") is not None),
+        "salesops_prev_close_non_null":sum(1 for r in prev_domestic if r.get("close") is not None),
+        "salesops_prev_close_total":sum(r.get("close") for r in prev_domestic if r.get("close") is not None),
     })
     return payload
 app.view_functions["health"] = clean_health
