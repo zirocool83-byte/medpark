@@ -1,3 +1,4 @@
+import region_fix_once
 from salesops_api_patch import app
 
 if __name__ == "__main__":
