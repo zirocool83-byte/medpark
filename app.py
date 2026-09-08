@@ -1,4 +1,4 @@
-from domestic_api_path_scan import app
+from domestic_api_auth_json_scan import app
 
 if __name__ == "__main__":
     import os
