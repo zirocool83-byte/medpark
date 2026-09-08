@@ -125,11 +125,6 @@ def _parse_row(row):
     return {"business":business,"region":region,"kind":kind,"first":first,"second":second,"close":close}
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
 def _fetch(year, month, force=False):
     key = (int(year), int(month))
     now = time.time()
@@ -143,18 +138,24 @@ def _fetch(year, month, force=False):
     url = SALESOPS_API + "?" + urllib.parse.urlencode({"year":int(year),"month":int(month)})
     headers = {
         "Accept":"application/json",
-        "User-Agent":"MedPark-Performance-Report/clean-1.0",
+        "User-Agent":"MedPark-Performance-Report/clean-1.1",
         "X-Requested-With":"XMLHttpRequest",
         "Authorization":"Bearer " + token,
     }
     req = urllib.request.Request(url, headers=headers, method="GET")
-    opener = urllib.request.build_opener(_NoRedirect)
     try:
-        with opener.open(req, timeout=8) as res:
+        # IMPORTANT: allow the platform's redirect chain. The read-only API returns
+        # valid JSON only when the normal redirect handler is allowed to complete.
+        with urllib.request.urlopen(req, timeout=8) as res:
             raw = res.read().decode("utf-8", "replace")
             status = getattr(res, "status", 200)
+            ctype = str(res.headers.get("Content-Type") or "").lower()
         if status != 200:
             meta = {"ok":False,"reason":"http_"+str(status),"rows":0}
+            _CACHE[key] = (now, {}, meta)
+            return {}, meta
+        if "json" not in ctype and not raw.lstrip().startswith(("{", "[")):
+            meta = {"ok":False,"reason":"non_json_response","rows":0}
             _CACHE[key] = (now, {}, meta)
             return {}, meta
         payload = json.loads(raw)
@@ -169,10 +170,12 @@ def _fetch(year, month, force=False):
         return index, meta
     except urllib.error.HTTPError as exc:
         meta = {"ok":False,"reason":"http_"+str(exc.code),"rows":0}
+    except urllib.error.URLError as exc:
+        meta = {"ok":False,"reason":"URLError:"+str(getattr(exc,"reason",exc))[:120],"rows":0}
     except json.JSONDecodeError:
         meta = {"ok":False,"reason":"invalid_json","rows":0}
     except Exception as exc:
-        meta = {"ok":False,"reason":type(exc).__name__,"rows":0}
+        meta = {"ok":False,"reason":type(exc).__name__+":"+str(exc)[:120],"rows":0}
     _CACHE[key] = (now, {}, meta)
     return {}, meta
 
@@ -252,7 +255,7 @@ def clean_dashboard():
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
-    resp.headers["X-MedPark-Runtime"] = "clean-salesops-1"
+    resp.headers["X-MedPark-Runtime"] = "clean-salesops-1.1"
     return resp
 
 app.view_functions["dashboard"] = clean_dashboard
@@ -268,9 +271,11 @@ def clean_health():
     keys = [(b,"국내",k) for b in base.BUSINESSES for k in base.KINDS]
     payload = dict(payload)
     payload.update({
-        "runtime":"clean-salesops-1",
+        "runtime":"clean-salesops-1.1",
         "salesops_current_ok":bool(cm.get("ok")),
         "salesops_previous_ok":bool(pm.get("ok")),
+        "salesops_current_reason":cm.get("reason"),
+        "salesops_previous_reason":pm.get("reason"),
         "salesops_domestic_rows":sum(1 for key in keys if key in cur),
         "salesops_prev_domestic_rows":sum(1 for key in keys if key in prev),
     })
