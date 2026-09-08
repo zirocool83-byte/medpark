@@ -1,4 +1,4 @@
-from production_entry import read_store, write_store, now_text
+from production_entry import app, read_store, write_store, now_text
 
 FIX_KEY = "region_fix_20260908_sep_second_overseas"
 
@@ -43,4 +43,14 @@ if not result:
     meta[FIX_KEY] = result
     write_store(data)
 
-print("REGION_FIX_RESULT=" + str(result))
+@app.get("/region-fix-status")
+def region_fix_status():
+    current = read_store().get("meta", {}).get(FIX_KEY, {})
+    moved = current.get("moved", []) if isinstance(current, dict) else []
+    return {
+        "status": "ok",
+        "applied_at": current.get("applied_at") if isinstance(current, dict) else None,
+        "moved_count": current.get("moved_count", 0) if isinstance(current, dict) else 0,
+        "businesses": sorted({str(x.get("business")) for x in moved if x.get("business")}),
+        "kinds": sorted({str(x.get("kind")) for x in moved if x.get("kind")}),
+    }
