@@ -1,4 +1,4 @@
-from report_bridge_verify import app
+from dashboard_bridge_fix import app
 
 if __name__ == "__main__":
     import os
