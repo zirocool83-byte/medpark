@@ -1,4 +1,4 @@
-import l4_net_probe2 as prev
+import salesops_variant_probe as prev
 import root_live_fetch as live
 from flask import jsonify, request
 
@@ -6,6 +6,7 @@ app = prev.app
 base = live.base
 
 SALESOPS_API = "https://medparkallo-medpark-salesops.mycafe24.ai/api/performance"
+REPORT_PATHS = ("/", "/performance-report")
 BRIDGE_STATE = {"active": False, "error": None}
 
 
@@ -60,12 +61,17 @@ except Exception as exc:
 
 @app.get("/bridge-health")
 def bridge_health():
-    return jsonify({
-        "bridge_active": BRIDGE_STATE["active"],
-        "bridge_error": BRIDGE_STATE["error"],
-        "live_module": getattr(live, "__name__", None),
-        "data_dir": str(getattr(base, "DATA_DIR", None)),
-    })
+    snap = {}
+    for y, m in ((2026, 9), (2026, 8)):
+        idx, meta = _fetch_from_snapshot(y, m)
+        dom = [v for k, v in idx.items() if k[1] == "국내"]
+        snap["%d-%02d" % (y, m)] = {
+            "domestic_rows": len(dom),
+            "second_total": sum(r["second"] for r in dom if r.get("second") is not None) if dom else None,
+            "close_total": sum(r["close"] for r in dom if r.get("close") is not None) if dom else None,
+            "saved_at": meta.get("saved_at"),
+        }
+    return jsonify({"bridge_active": BRIDGE_STATE["active"], "bridge_error": BRIDGE_STATE["error"], "snapshots": snap})
 
 
 @app.post("/salesops-sync")
@@ -92,22 +98,6 @@ def salesops_sync():
         except Exception as exc:
             errors.append({"error": type(exc).__name__ + ": " + str(exc)[:120]})
     return jsonify({"ok": bool(saved), "saved": saved, "errors": errors})
-
-
-@app.get("/salesops-sync-status")
-def salesops_sync_status():
-    out = {}
-    for y, m in ((2026, 9), (2026, 8)):
-        idx, meta = _fetch_from_snapshot(y, m)
-        dom = [v for k, v in idx.items() if k[1] == "국내"]
-        out["%d-%02d" % (y, m)] = {
-            "rows": len(idx),
-            "domestic_rows": len(dom),
-            "second_total": sum(r["second"] for r in dom if r.get("second") is not None) if dom else None,
-            "close_total": sum(r["close"] for r in dom if r.get("close") is not None) if dom else None,
-            "saved_at": meta.get("saved_at"),
-        }
-    return jsonify(out)
 
 
 SCRIPT = """
@@ -138,7 +128,7 @@ SCRIPT = """
           return r.json();
         })
         .then(function(j){ months.push({ year: yy, month: mm, payload: j }); step(i + 1); })
-        .catch(function(e){ say('국내 연동 실패 (SalesOps 호출): ' + e.message, '#fdecea'); });
+        .catch(function(e){ say('CORS 차단 · SalesOps 수정 필요 (' + e.message + ')', '#fdecea'); });
     }
     function post(){
       fetch('/salesops-sync', {
@@ -153,9 +143,9 @@ SCRIPT = """
         if (!flag('mp_bridge_reloaded')) { setFlag('mp_bridge_reloaded'); location.reload(); return; }
         var n = (j.saved || []).map(function(s){ return s.year + '-' + s.month + ' ' + s.rows + '행'; }).join(' / ');
         say('국내 연동 완료 · ' + n, '#eaf7ee');
-        setTimeout(function(){ box.style.display = 'none'; }, 4000);
+        setTimeout(function(){ box.style.display = 'none'; }, 5000);
       })
-      .catch(function(e){ say('국내 연동 실패 (저장): ' + e.message, '#fdecea'); });
+      .catch(function(e){ say('저장 실패: ' + e.message, '#fdecea'); });
     }
     step(0);
   }
@@ -168,11 +158,13 @@ SCRIPT = """
 @app.after_request
 def inject_bridge(resp):
     try:
-        if request.path != "/":
+        if request.path not in REPORT_PATHS:
             return resp
         if request.args.get("capture") == "1":
             return resp
         if resp.direct_passthrough:
+            return resp
+        if resp.status_code != 200:
             return resp
         ctype = str(resp.headers.get("Content-Type") or "")
         if "text/html" not in ctype.lower():
