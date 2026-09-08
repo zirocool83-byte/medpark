@@ -1,4 +1,4 @@
-from root_direct_endpoint import app
+from salesops_variant_probe import app
 
 if __name__ == "__main__":
     import os
