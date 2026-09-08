@@ -17,16 +17,18 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def probe(url, headers=None, no_redirect=False):
-    req = urllib.request.Request(url, headers={"User-Agent":"MedPark-NetProbe/4.0", **(headers or {})}, method="GET")
+    req = urllib.request.Request(url, headers={"User-Agent":"MedPark-NetProbe/4.1", **(headers or {})}, method="GET")
     opener = urllib.request.build_opener(NoRedirect) if no_redirect else urllib.request.build_opener()
     try:
         with opener.open(req, timeout=5) as res:
             body = res.read(240).decode("utf-8", "replace")
-            return {"ok":True,"status":getattr(res,"status",200),"content_type":res.headers.get("Content-Type"),"location":res.headers.get("Location"),"final_url":res.geturl(),"body_prefix":body[:180]}
+            ctype = str(res.headers.get("Content-Type") or "").lower()
+            return {"ok":True,"status":getattr(res,"status",200),"json":("json" in ctype or body.lstrip().startswith(("{","["))),"content_type":res.headers.get("Content-Type"),"location":res.headers.get("Location"),"final_url":res.geturl(),"body_prefix":body[:180]}
     except urllib.error.HTTPError as exc:
         try: body=exc.read(240).decode("utf-8","replace")
         except Exception: body=""
-        return {"ok":False,"kind":"HTTPError","status":exc.code,"content_type":exc.headers.get("Content-Type"),"location":exc.headers.get("Location"),"final_url":getattr(exc,'url',None),"body_prefix":body[:180]}
+        ctype = str(exc.headers.get("Content-Type") or "").lower()
+        return {"ok":False,"kind":"HTTPError","status":exc.code,"json":("json" in ctype or body.lstrip().startswith(("{","["))),"content_type":exc.headers.get("Content-Type"),"location":exc.headers.get("Location"),"final_url":getattr(exc,'url',None),"body_prefix":body[:180]}
     except urllib.error.URLError as exc:
         return {"ok":False,"kind":"URLError","detail":str(getattr(exc,"reason",exc))[:240]}
     except Exception as exc:
@@ -44,4 +46,5 @@ def clean_net_probe():
         "api_auth_forwarded_noredirect":probe(api,forwarded,True),
         "api_auth_forwarded_redirect":probe(api,forwarded,False),
     }
-    return jsonify({"token_configured":bool(token),"results":results}),200
+    forwarded_ok = any(r.get("ok") and r.get("status")==200 and r.get("json") for name,r in results.items() if name.startswith("api_auth_forwarded"))
+    return jsonify({"winner":"FORWARDED_OK" if forwarded_ok else "FORWARDED_FAIL","token_configured":bool(token),"results":results}),200
