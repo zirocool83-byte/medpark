@@ -1,4 +1,4 @@
-from root_boot_cache_stable import app
+from root_direct_endpoint import app
 
 if __name__ == "__main__":
     import os
