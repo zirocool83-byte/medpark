@@ -10,6 +10,10 @@ import salesops_api_patch as sap
 
 app = active.app
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
 
 def _fetch_remote_xhr(year, month, force=False):
     cache_key = (int(year), int(month))
@@ -26,6 +30,7 @@ def _fetch_remote_xhr(year, month, force=False):
     url = sap.SALESOPS_API + "?" + urllib.parse.urlencode({"year":int(year),"month":int(month)})
     attempts = [{"Authorization":"Bearer " + token},{"X-Read-Only-Token":token}]
     last_error = None
+    opener = urllib.request.build_opener(_NoRedirect)
     for auth_headers in attempts:
         headers = {
             "Accept":"application/json",
@@ -35,7 +40,7 @@ def _fetch_remote_xhr(year, month, force=False):
         headers.update(auth_headers)
         req = urllib.request.Request(url, headers=headers, method="GET")
         try:
-            with urllib.request.urlopen(req, timeout=8) as res:
+            with opener.open(req, timeout=8) as res:
                 raw = res.read()
                 status = getattr(res, "status", 200)
             if status != 200:
@@ -61,6 +66,12 @@ def _fetch_remote_xhr(year, month, force=False):
             last_error = "http_" + str(exc.code)
             if exc.code not in (401,403):
                 break
+        except json.JSONDecodeError:
+            last_error = "JSONDecodeError"
+            break
+        except urllib.error.URLError:
+            last_error = "URLError"
+            break
         except Exception as exc:
             last_error = type(exc).__name__
             break
