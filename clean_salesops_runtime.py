@@ -13,7 +13,8 @@ app = ph.app
 base = ph.base
 ui = ph.ppt.ui
 
-SALESOPS_API = "https://medparkallo-medpark-salesops.mycafe24.ai/api/performance"
+SALESOPS_HOST = "medparkallo-medpark-salesops.mycafe24.ai"
+SALESOPS_API = "https://" + SALESOPS_HOST + "/api/performance"
 TOKEN_ENV = "PERFORMANCE_READ_ONLY_TOKEN"
 _CACHE = {}
 _CACHE_TTL = 20
@@ -138,14 +139,14 @@ def _fetch(year, month, force=False):
     url = SALESOPS_API + "?" + urllib.parse.urlencode({"year":int(year),"month":int(month)})
     headers = {
         "Accept":"application/json",
-        "User-Agent":"MedPark-Performance-Report/clean-1.1",
+        "User-Agent":"MedPark-Performance-Report/clean-1.2",
         "X-Requested-With":"XMLHttpRequest",
         "Authorization":"Bearer " + token,
+        "X-Forwarded-Proto":"https",
+        "X-Forwarded-Host":SALESOPS_HOST,
     }
     req = urllib.request.Request(url, headers=headers, method="GET")
     try:
-        # IMPORTANT: allow the platform's redirect chain. The read-only API returns
-        # valid JSON only when the normal redirect handler is allowed to complete.
         with urllib.request.urlopen(req, timeout=8) as res:
             raw = res.read().decode("utf-8", "replace")
             status = getattr(res, "status", 200)
@@ -191,31 +192,24 @@ def _report(year, month):
     cur, cur_meta = _fetch(year, month, True)
     prev_year, prev_month = ((year-1, 12) if month == 1 else (year, month-1))
     prev, prev_meta = _fetch(prev_year, prev_month, True)
-
     for row in details:
         if row.get("region") != "국내":
             continue
         key = (row.get("business"), "국내", row.get("kind"))
         c = cur.get(key) or {}
         p = prev.get(key) or {}
-        if c.get("first") is not None:
-            row["first"] = c["first"]
-        if c.get("second") is not None:
-            row["second"] = c["second"]
+        if c.get("first") is not None: row["first"] = c["first"]
+        if c.get("second") is not None: row["second"] = c["second"]
         if month == 8 and c.get("close") is not None:
             row["close"] = c["close"]
             row["close_has"] = True
-        if p.get("close") is not None:
-            row["prev_close"] = p["close"]
-
+        if p.get("close") is not None: row["prev_close"] = p["close"]
     sum_fields = ("prev_close","first","second","third_confirmed","third_forecast","close","next_first","carryover","qproj","october","november","december","q4proj","second_half")
     totals = [r for r in report.get("rows", []) if r.get("is_total")]
     for total in totals:
         source = details if total.get("is_grand") else [r for r in details if r.get("business") == total.get("business")]
-        for field in sum_fields:
-            total[field] = _sum(source, field)
+        for field in sum_fields: total[field] = _sum(source, field)
         total["close_has"] = bool(source) and all(r.get("close_has") for r in source)
-
     domestic = [r for r in details if r.get("region") == "국내"]
     report["clean_salesops"] = {
         "current":cur_meta,
@@ -244,34 +238,29 @@ def clean_dashboard():
         year = int(request.args.get("year", 2026)); month = int(request.args.get("month", 9))
     except Exception:
         year, month = 2026, 9
-    if month < 1 or month > 12:
-        month = 9
+    if month < 1 or month > 12: month = 9
     report = _report(year, month)
     html = ui.render_report(report, base.current_user(), request.args.get("capture") == "1")
     if request.args.get("capture") != "1":
-        banner = _status_banner(report)
-        html = html.replace("<div class='table-wrap'>", banner + "<div class='table-wrap'>", 1)
+        html = html.replace("<div class='table-wrap'>", _status_banner(report) + "<div class='table-wrap'>", 1)
     resp = make_response(html)
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
-    resp.headers["X-MedPark-Runtime"] = "clean-salesops-1.1"
+    resp.headers["X-MedPark-Runtime"] = "clean-salesops-1.2"
     return resp
-
 app.view_functions["dashboard"] = clean_dashboard
-
 
 _original_health = app.view_functions.get("health")
 def clean_health():
     payload = _original_health() if _original_health else {"status":"ok"}
-    if not isinstance(payload, dict):
-        payload = {"status":"ok"}
+    if not isinstance(payload, dict): payload = {"status":"ok"}
     cur, cm = _fetch(2026, 9, True)
     prev, pm = _fetch(2026, 8, True)
     keys = [(b,"국내",k) for b in base.BUSINESSES for k in base.KINDS]
     payload = dict(payload)
     payload.update({
-        "runtime":"clean-salesops-1.1",
+        "runtime":"clean-salesops-1.2",
         "salesops_current_ok":bool(cm.get("ok")),
         "salesops_previous_ok":bool(pm.get("ok")),
         "salesops_current_reason":cm.get("reason"),
