@@ -1,4 +1,4 @@
-from excel_ui import app
+from runtime_patch import app
 
 if __name__ == "__main__":
     import os
