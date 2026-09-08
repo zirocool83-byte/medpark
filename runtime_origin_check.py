@@ -3,6 +3,27 @@ from flask import jsonify
 
 app = rt.app
 ui = rt.ui
+core = rt.core
+base = rt.base
+
+
+def _keys():
+    return [(b, "국내", k) for b in base.BUSINESSES for k in base.KINDS]
+
+
+def _snap_state():
+    cur, _ = core._load_snapshot(2026, 9)
+    prev, _ = core._load_snapshot(2026, 8)
+    keys = _keys()
+    cur_rows = [cur.get(k) or {} for k in keys]
+    prev_rows = [prev.get(k) or {} for k in keys]
+    return {
+        'current_rows': sum(1 for k in keys if k in cur),
+        'previous_rows': sum(1 for k in keys if k in prev),
+        'second_non_null': sum(1 for r in cur_rows if r.get('second') is not None),
+        'second_total': sum(r.get('second') for r in cur_rows if r.get('second') is not None),
+        'prev_close_non_null': sum(1 for r in prev_rows if r.get('close') is not None),
+    }
 
 @app.get('/runtime-origin-check')
 def runtime_origin_check():
@@ -16,6 +37,7 @@ def runtime_origin_check():
         'render_name': getattr(render_fn, '__name__', ''),
         'dashboard_module': getattr(dashboard_fn, '__module__', '') if dashboard_fn else '',
         'dashboard_name': getattr(dashboard_fn, '__name__', '') if dashboard_fn else '',
+        **_snap_state(),
     }), 200
 
 @app.get('/runtime-origin-excel')
@@ -24,10 +46,18 @@ def runtime_origin_excel():
     ok = getattr(fn, '__module__', '') == 'excel_ui' and getattr(fn, '__name__', '') == 'report_data'
     return jsonify({'ok':ok}), (200 if ok else 409)
 
-@app.get('/runtime-origin-salesops')
-def runtime_origin_salesops():
-    fn = ui.report_data
-    mod = getattr(fn, '__module__', '')
-    name = getattr(fn, '__name__', '')
-    ok = 'salesops' in mod.lower() or 'salesops' in name.lower()
-    return jsonify({'ok':ok,'module':mod,'name':name}), (200 if ok else 409)
+@app.get('/snap-current6')
+def snap_current6():
+    s=_snap_state(); return jsonify(s), (200 if s['current_rows']==6 else 409)
+
+@app.get('/snap-prev6')
+def snap_prev6():
+    s=_snap_state(); return jsonify(s), (200 if s['previous_rows']==6 else 409)
+
+@app.get('/snap-second6')
+def snap_second6():
+    s=_snap_state(); return jsonify(s), (200 if s['second_non_null']==6 and s['second_total']==797318256 else 409)
+
+@app.get('/snap-close6')
+def snap_close6():
+    s=_snap_state(); return jsonify(s), (200 if s['prev_close_non_null']==6 else 409)
