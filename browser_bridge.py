@@ -1,13 +1,12 @@
-import sys
-
 import l4_net_probe2 as prev
+import root_live_fetch as live
 from flask import jsonify, request
 
 app = prev.app
-live = sys.modules.get("root_live_fetch")
 base = live.base
 
 SALESOPS_API = "https://medparkallo-medpark-salesops.mycafe24.ai/api/performance"
+BRIDGE_STATE = {"active": False, "error": None}
 
 
 def _num(v):
@@ -43,18 +42,38 @@ def _parse_doc(doc):
 
 
 def _fetch_from_snapshot(year, month):
-    cached, saved = live._load_snapshot(year, month)
+    try:
+        cached, saved = live._load_snapshot(year, month)
+    except Exception as exc:
+        return {}, {"ok": False, "reason": "snapshot_error:" + type(exc).__name__, "source": "snapshot"}
     if cached:
         return cached, {"ok": True, "reason": "browser_bridge", "source": "snapshot", "saved_at": saved, "rows": len(cached)}
     return {}, {"ok": False, "reason": "브라우저 동기화 대기중", "source": "snapshot"}
 
 
-live._fetch = _fetch_from_snapshot
+try:
+    live._fetch = _fetch_from_snapshot
+    BRIDGE_STATE["active"] = True
+except Exception as exc:
+    BRIDGE_STATE["error"] = type(exc).__name__ + ": " + str(exc)[:120]
+
+
+@app.get("/bridge-health")
+def bridge_health():
+    return jsonify({
+        "bridge_active": BRIDGE_STATE["active"],
+        "bridge_error": BRIDGE_STATE["error"],
+        "live_module": getattr(live, "__name__", None),
+        "data_dir": str(getattr(base, "DATA_DIR", None)),
+    })
 
 
 @app.post("/salesops-sync")
 def salesops_sync():
-    user = base.current_user()
+    try:
+        user = base.current_user()
+    except Exception:
+        user = None
     if not user:
         return jsonify({"ok": False, "error": "unauthorized"}), 401
     payload = request.get_json(silent=True) or {}
@@ -99,6 +118,8 @@ SCRIPT = """
   box.style.cssText = "position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;padding:11px 13px;border-radius:9px;font-size:16px;font-weight:700;font-family:-apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.18);border:1px solid #ccc;background:#fff8e1";
   box.textContent = "SalesOps 국내 데이터 불러오는 중...";
   function say(t, bg){ box.textContent = t; box.style.background = bg; }
+  function flag(k){ try { return sessionStorage.getItem(k); } catch(e){ return '1'; } }
+  function setFlag(k){ try { sessionStorage.setItem(k, '1'); } catch(e){} }
   function start(){
     document.body.appendChild(box);
     var u = new URL(location.href);
@@ -129,11 +150,7 @@ SCRIPT = """
       .then(function(r){ return r.json(); })
       .then(function(j){
         if (!j.ok) { throw new Error(JSON.stringify(j)); }
-        if (!sessionStorage.getItem('mp_bridge_reloaded')) {
-          sessionStorage.setItem('mp_bridge_reloaded', '1');
-          location.reload();
-          return;
-        }
+        if (!flag('mp_bridge_reloaded')) { setFlag('mp_bridge_reloaded'); location.reload(); return; }
         var n = (j.saved || []).map(function(s){ return s.year + '-' + s.month + ' ' + s.rows + '행'; }).join(' / ');
         say('국내 연동 완료 · ' + n, '#eaf7ee');
         setTimeout(function(){ box.style.display = 'none'; }, 4000);
@@ -154,6 +171,8 @@ def inject_bridge(resp):
         if request.path != "/":
             return resp
         if request.args.get("capture") == "1":
+            return resp
+        if resp.direct_passthrough:
             return resp
         ctype = str(resp.headers.get("Content-Type") or "")
         if "text/html" not in ctype.lower():
