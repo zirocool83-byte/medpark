@@ -3,8 +3,14 @@
 표는 서버가 리포트 데이터로 직접 그린다. 캡처도 붙여넣기도 없다.
 문안은 화면이 만든다. 숫자 조립 규칙을 두 번 구현하지 않기 위해서다.
 
-문안은 짧게 간다. 사업분야별 숫자는 표가 이미 보여주므로 문장에서 뺀다.
-문단마다 크기를 지정한다. 지정하지 않으면 상자 기본값이 먹어 표를 덮는다.
+25년 누계는 narrative_history 의 월별 값을 마감월까지 누적해서 쓴다.
+김태현 님 시트의 '2025년 누계실적' 열을 그대로 쓰지 않는 이유:
+그 열은 1~6월 기준인데 2026년 누계는 1~7월 기준이라 구간이 어긋난다.
+(2026 94.83억 vs 2025 70.20억 → +35.1% 로 보이지만, 같은 구간이면 +18% 대)
+여기서는 회의 대상월에 맞춰 두 해를 같은 구간으로 누적한다.
+
+25년 자료에는 기존/신규 구분이 없다. 신규 구분은 26년 계획관리용이므로
+25년 값은 전액 기존 행에 넣고 신규 행은 0으로 둔다.
 
 증감 표기는 ▲ 빨강 / ▼ 파랑 / - 회색으로 통일한다.
 
@@ -21,12 +27,17 @@ import narrative_table as tbl
 import narrative_table_cfg as tcfg
 from flask import Response, jsonify, request
 
+try:
+    import narrative_history as hist
+except Exception:
+    hist = None
+
 app = prev.app
-MARK = "mp-pptx-ui2"
+MARK = "mp-pptx-ui3"
 
 COLOR = {"blue": builder.BLUE, "red": builder.RED, "black": builder.BLACK}
 
-FIELDS = ("ytd", "prev_ytd", "prev_preclose", "prev_close",
+FIELDS = ("ytd", "prev_preclose", "prev_close",
           "first", "second", "third_confirmed", "third_forecast",
           "next_first", "second_half")
 
@@ -38,6 +49,13 @@ def _to_int(value):
         return int(round(float(value)))
     except Exception:
         return None
+
+
+def _closing_month(month, meeting):
+    """이 회의에서 마감을 다루는 달. 누계 비교 구간의 끝이다."""
+    if meeting == "pre":
+        return month
+    return 12 if month == 1 else month - 1
 
 
 def _table_index(year, month, meeting):
@@ -53,6 +71,18 @@ def _table_index(year, month, meeting):
         rec["prev_provisional"] = rec.get("prev_close")
         index[(business, region, kind)] = rec
 
+    # 25년 누계: 마감월까지 누적. 기존 행에만 넣는다.
+    through = _closing_month(month, meeting)
+    if hist is not None:
+        for (business, region, kind), rec in index.items():
+            if kind != "기존":
+                rec["prev_ytd"] = 0
+                continue
+            try:
+                rec["prev_ytd"] = hist.ytd_2025(business, region, through)
+            except Exception:
+                rec["prev_ytd"] = None
+
     if meeting == "pre":
         ny, nm = (year + 1, 1) if month == 12 else (year, month + 1)
         nxt = prev._build(ny, nm)
@@ -65,17 +95,18 @@ def _table_index(year, month, meeting):
     return index
 
 
-def _ctx(year, month):
+def _ctx(year, month, meeting):
     pm = 12 if month == 1 else month - 1
     nm = 1 if month == 12 else month + 1
-    return {"cy": year, "py": year - 1, "cm": month, "pm": pm, "nm": nm}
+    return {"cy": year, "py": year - 1, "cm": month, "pm": pm, "nm": nm,
+            "close_m": _closing_month(month, meeting)}
 
 
 def _frames(year, month, meeting):
     index = _table_index(year, month, meeting)
     if not index:
         return {}, 0
-    ctx = _ctx(year, month)
+    ctx = _ctx(year, month, meeting)
     full_cols = tcfg.columns(meeting, ctx, plan=False)
     plan_cols = tcfg.columns(meeting, ctx, plan=True)
     rows_full = tbl.make_rows(index, full_cols)
@@ -94,12 +125,19 @@ def narrative_pptx_health():
     if not prev._current_user():
         return jsonify({"error": "unauthorized"}), 401
     try:
+        index = _table_index(2026, 9, "r1")
+        cur = sum(v.get("ytd") or 0 for v in index.values())
+        old = sum(v.get("prev_ytd") or 0 for v in index.values())
         frames, n = _frames(2026, 9, "r1")
     except Exception as exc:
         return jsonify({"table_error": type(exc).__name__ + ": " + str(exc)[:200]}), 500
     return jsonify({
         "template_exists": builder.TEMPLATE.exists(),
-        "template_bytes": builder.TEMPLATE.stat().st_size if builder.TEMPLATE.exists() else 0,
+        "history_loaded": hist is not None,
+        "closing_month": _closing_month(9, "r1"),
+        "ytd_2026_억": round(cur / 1e8, 2),
+        "ytd_2025_억": round(old / 1e8, 2),
+        "yoy_pct": round((cur - old) / old * 100, 1) if old else None,
         "table_ok": bool(frames),
         "table_cells": n,
     })
@@ -179,7 +217,6 @@ SCRIPT = """
     return String(s).replace(/△/g, '▼').replace(/\\+/g, '▲');
   }
   function txt(id){ var e = $(id); return e ? arrow((e.textContent || '').trim()) : ''; }
-  // t 내용, c 색, b 굵게, i 들여쓰기, s 글자크기(100 = 1pt)
   function P(t, c, b, i, s){ return {t: t, c: c || 'black', b: !!b, i: i || 0, s: s || 1200}; }
 
   var SCOPES = [['dom','국내'],['ovs','해외']];
@@ -207,7 +244,6 @@ SCRIPT = """
   }
   function firstTok(s){ return (s || '').split(' ')[0]; }
 
-  // 사업분야별 숫자는 표가 보여주므로 문장에서 뺀다.
   function section(pfx, heading, subHeading){
     var out = [], cur = curIdx(pfx);
     var curLabel = txt('th-' + pfx + cur);
