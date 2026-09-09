@@ -2,17 +2,21 @@
 
 narrative_template.pptx 는 실제 결산회의 장표에서 실적 슬라이드 3장과
 마스터·레이아웃·테마만 남기고 엑셀 캡처를 제거한 것이다.
-본문 텍스트 상자의 문단을 갈아끼우고, 비워둔 표 자리에 네이티브 표를 넣는다.
 
-문단 크기를 명시하지 않으면 상자 기본값이 먹어 원본보다 커진다.
-표를 덮지 않도록 크기를 지정해서 넣는다.
+배치
+  왼쪽 상자  요약(합계·국내/해외)          템플릿의 TextBox 2
+  오른쪽 상자 변동 요인·특이사항            여기서 새로 만들어 넣는다
+  아래        표                          네이티브 표
+
+원본은 왼쪽 상자가 슬라이드 폭을 다 차지하는데 글자는 왼쪽 절반만 쓴다.
+변동 요인이 늘면 상자가 아래로 자라 표를 덮는다.
+그래서 요인을 오른쪽 빈 공간으로 옮긴다. 항목이 늘어도 표를 건드리지 않는다.
 
 주의 1: txBody 는 <a:bodyPr>...</a:bodyPr><a:lstStyle/> 다음에 문단이 온다.
         bodyPr 이 자식(<a:spAutoFit/>)을 가질 수 있어서 여는 태그만 잘라내면
         XML 이 깨지고, 파워포인트는 오류 없이 그 상자를 통째로 무시한다.
 
-주의 2: 이 서버에는 Flask 와 gunicorn 만 설치돼 있다.
-        외부 라이브러리를 쓰면 모듈 로드가 통째로 실패해 기능이 화면에서 사라진다.
+주의 2: 이 서버에는 Flask 와 gunicorn 만 있다. 외부 라이브러리 금지.
 """
 
 import io
@@ -22,6 +26,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 TEMPLATE = Path(__file__).with_name("narrative_template.pptx")
+EMU = 914400
 
 SLIDE_CLOSE = "ppt/slides/slide3.xml"
 SLIDE_FCST = "ppt/slides/slide4.xml"
@@ -34,6 +39,9 @@ BLACK = "000000"
 SIZE_TITLE = 1400
 SIZE_BODY = 1200
 SIZE_SMALL = 1100
+
+# 오른쪽 상자 위치 (인치)
+RIGHT_BOX = {"x": 6.70, "y": 0.92, "w": 6.40, "h": 1.60}
 
 SHADOW = (
     '<a:effectLst><a:outerShdw blurRad="38100" dist="38100" dir="2700000" algn="tl">'
@@ -69,6 +77,20 @@ def blank(size=SIZE_SMALL):
     return '<a:p><a:endParaRPr lang="ko-KR" altLang="en-US" sz="%d" dirty="0"/></a:p>' % int(size)
 
 
+def textbox(shape_id, name, x, y, w, h, paragraphs):
+    """새 텍스트 상자. 내용에 맞춰 아래로 자란다."""
+    return (
+        '<p:sp><p:nvSpPr><p:cNvPr id="%d" name="%s"/>'
+        '<p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>'
+        '<p:spPr><a:xfrm><a:off x="%d" y="%d"/><a:ext cx="%d" cy="%d"/></a:xfrm>'
+        '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>'
+        '<p:txBody><a:bodyPr wrap="square" rtlCol="0"><a:spAutoFit/></a:bodyPr>'
+        '<a:lstStyle/>%s</p:txBody></p:sp>'
+        % (shape_id, name, int(x * EMU), int(y * EMU), int(w * EMU), int(h * EMU),
+           "".join(paragraphs))
+    )
+
+
 def _replace_txbody(slide_xml, shape_name, paragraphs):
     pattern = re.compile(
         r'(<p:sp>(?:(?!</p:sp>).)*?name="' + re.escape(shape_name) + r'"(?:(?!</p:sp>).)*?</p:sp>)',
@@ -98,44 +120,61 @@ def _replace_txbody(slide_xml, shape_name, paragraphs):
     return slide_xml[:match.start(1)] + new_sp + slide_xml[match.end(1):], True
 
 
-def _insert_frame(slide_xml, frame_xml):
+def _append(slide_xml, fragment):
     idx = slide_xml.rindex("</p:spTree>")
-    return slide_xml[:idx] + frame_xml + slide_xml[idx:]
+    return slide_xml[:idx] + fragment + slide_xml[idx:]
 
 
 def build(blocks, frames=None):
+    """blocks 키
+         close, fcst              왼쪽 요약 문단
+         close_right, fcst_right  오른쪽 변동 요인 문단
+         plan_left, plan_right    3장 좌우
+       frames: {"close":표, "fcst":표, "plan":표}
+    """
     if not TEMPLATE.exists():
         raise FileNotFoundError("narrative_template.pptx 가 없습니다")
 
     frames = frames or {}
     src = zipfile.ZipFile(TEMPLATE)
     out_buf = io.BytesIO()
-    report = {"replaced": [], "missing": [], "tables": [], "checked": []}
+    report = {"replaced": [], "missing": [], "tables": [], "boxes": [], "checked": []}
 
-    targets = {
-        SLIDE_CLOSE: ([("TextBox 2", blocks.get("close") or [])], frames.get("close")),
-        SLIDE_FCST: ([("TextBox 2", blocks.get("fcst") or [])], frames.get("fcst")),
-        SLIDE_PLAN: ([("TextBox 2", blocks.get("plan_left") or []),
-                      ("직사각형 5", blocks.get("plan_right") or [])], frames.get("plan")),
+    plan = {
+        SLIDE_CLOSE: {"shapes": [("TextBox 2", blocks.get("close") or [])],
+                      "right": blocks.get("close_right") or [],
+                      "right_id": 71, "frame": frames.get("close")},
+        SLIDE_FCST: {"shapes": [("TextBox 2", blocks.get("fcst") or [])],
+                     "right": blocks.get("fcst_right") or [],
+                     "right_id": 72, "frame": frames.get("fcst")},
+        SLIDE_PLAN: {"shapes": [("TextBox 2", blocks.get("plan_left") or []),
+                                ("직사각형 5", blocks.get("plan_right") or [])],
+                     "right": [], "right_id": 73, "frame": frames.get("plan")},
     }
 
     with zipfile.ZipFile(out_buf, "w", zipfile.ZIP_DEFLATED) as out:
         for item in src.infolist():
             data = src.read(item.filename)
-            if item.filename in targets:
-                shapes, frame = targets[item.filename]
+            spec = plan.get(item.filename)
+            if spec:
+                short = item.filename.split("/")[-1]
                 xml = data.decode("utf-8")
-                for shape_name, paras in shapes:
+                for shape_name, paras in spec["shapes"]:
                     if not paras:
                         continue
                     xml, ok = _replace_txbody(xml, shape_name, paras)
-                    tag = item.filename.split("/")[-1] + ":" + shape_name
-                    (report["replaced"] if ok else report["missing"]).append(tag)
-                if frame:
-                    xml = _insert_frame(xml, frame)
-                    report["tables"].append(item.filename.split("/")[-1])
+                    (report["replaced"] if ok else report["missing"]).append(short + ":" + shape_name)
+                if spec["right"]:
+                    xml = _append(xml, textbox(
+                        spec["right_id"], "변동요인",
+                        RIGHT_BOX["x"], RIGHT_BOX["y"], RIGHT_BOX["w"], RIGHT_BOX["h"],
+                        spec["right"]))
+                    report["boxes"].append(short)
+                if spec["frame"]:
+                    xml = _append(xml, spec["frame"])
+                    report["tables"].append(short)
                 ElementTree.fromstring(xml)
-                report["checked"].append(item.filename.split("/")[-1])
+                report["checked"].append(short)
                 data = xml.encode("utf-8")
             out.writestr(item, data)
     return out_buf.getvalue(), report
