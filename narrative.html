@@ -14,7 +14,10 @@
   body{background:var(--bg);color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","맑은 고딕",sans-serif;
     font-size:18px;line-height:1.6;-webkit-text-size-adjust:100%}
-  .wrap{max-width:1060px;margin:0 auto;padding:28px 20px 80px}
+  .wrap{max-width:1100px;margin:0 auto;padding:28px 20px 80px}
+
+  #err{display:none;margin-bottom:18px;padding:14px 16px;background:#FAE8E6;color:#8C2018;
+    border:1px solid #E0A9A2;border-radius:6px;font-size:15px;white-space:pre-wrap}
 
   header.top{display:flex;flex-wrap:wrap;gap:18px 28px;align-items:flex-end;
     padding-bottom:20px;border-bottom:2px solid var(--ink);margin-bottom:14px}
@@ -37,16 +40,19 @@
   section > p.hint{margin:0 0 20px;font-size:15px;color:var(--muted)}
 
   table.grid{width:100%;border-collapse:collapse;margin-bottom:14px}
-  table.grid th,table.grid td{padding:10px 7px;text-align:right;border-bottom:1px solid var(--rule);vertical-align:middle}
+  table.grid th,table.grid td{padding:8px 7px;text-align:right;border-bottom:1px solid var(--rule);vertical-align:middle}
   table.grid th{font-size:15px;color:var(--muted);font-weight:600}
   table.grid th:first-child,table.grid td:first-child{text-align:left;white-space:nowrap}
   table.grid input{width:100%;text-align:right;font-variant-numeric:tabular-nums}
-  table.grid tr.total td,table.grid tr.total th{font-weight:700;border-bottom:2px solid var(--ink);background:#F9FBFC}
-  th.cur,td.cur{background:#EFF4F8}
-  td.delta{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap;font-size:17px}
+  table.grid tr.sub td,table.grid tr.sub th{font-weight:700;background:#F4F7F9}
+  table.grid tr.total td,table.grid tr.total th{font-weight:800;border-bottom:2px solid var(--ink);background:#EDF2F6}
+  th.cur,td.cur{background:#E4EDF5}
+  tr.sub td.cur{background:#DEE9F2}
+  tr.total td.cur{background:#D8E5F0}
+  td.delta{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap;font-size:16px}
   .up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--muted)}
-  .tag{display:inline-block;font-size:13px;font-weight:600;padding:2px 7px;border-radius:3px;
-    background:#E7EDF2;color:var(--muted);margin-left:8px;vertical-align:middle}
+  .tag{display:inline-block;font-size:12px;font-weight:600;padding:2px 6px;border-radius:3px;
+    background:#E7EDF2;color:var(--muted);margin-left:6px;vertical-align:middle}
   .tag.manual{background:#FBEEC9;color:#7A5A10}
   .tag.auto{background:#DCEBDD;color:#2C5E33}
 
@@ -65,8 +71,8 @@
   .verdict.warn{background:#FAE8E6;color:#8C2018}
 
   .factors h3{font-size:17px;margin:0 0 10px;font-weight:700}
-  .frow{display:grid;grid-template-columns:104px 1fr 168px 176px 44px;gap:8px;margin-bottom:8px;align-items:center}
-  .frow input,.frow select{min-height:44px;font-size:17px}
+  .frow{display:grid;grid-template-columns:92px 116px 1fr 152px 168px 44px;gap:7px;margin-bottom:8px;align-items:center}
+  .frow input,.frow select{min-height:44px;font-size:16px;padding:8px 9px}
   .frow input.amt{text-align:right;font-variant-numeric:tabular-nums}
   button.x{min-height:44px;border:1px solid var(--rule);background:var(--field);color:var(--muted);
     border-radius:4px;font-size:19px;cursor:pointer;line-height:1}
@@ -80,7 +86,7 @@
   .block{border-left:3px solid var(--ink);padding:2px 0 2px 20px;margin-bottom:26px}
   .block .lbl{font-size:14px;color:var(--muted);margin-bottom:8px}
   .block .txt{font-family:"Nanum Myeongjo","AppleMyungjo","Batang","바탕",serif;
-    font-size:21px;line-height:1.85;white-space:pre-wrap;word-break:keep-all;max-width:62ch}
+    font-size:21px;line-height:1.85;white-space:pre-wrap;word-break:keep-all;max-width:64ch}
   .block .txt.empty{color:#9AA7B3}
   button.copy{margin-top:12px;background:var(--ink);color:#fff;border:none;border-radius:4px;
     padding:11px 20px;font-size:16px;font-family:inherit;cursor:pointer;min-height:44px}
@@ -89,14 +95,14 @@
   .note{font-size:15px;color:var(--muted);margin-top:22px;padding-top:16px;border-top:1px solid var(--rule)}
   .note b{color:var(--ink)}
 
-  @media (max-width:800px){
+  @media (max-width:860px){
     body{font-size:17px}
     .wrap{padding:20px 12px 60px}
-    .frow{grid-template-columns:1fr 1fr;gap:8px}
+    .frow{grid-template-columns:1fr 1fr;gap:7px}
     .frow .del{grid-column:2;justify-self:end;width:60px}
-    table.grid th,table.grid td{padding:7px 4px;font-size:14px}
-    table.grid input{font-size:15px;padding:7px 6px}
-    td.delta{font-size:15px}
+    table.grid th,table.grid td{padding:6px 4px;font-size:14px}
+    table.grid input{font-size:15px;padding:7px 5px}
+    td.delta{font-size:14px}
     .block .txt{font-size:19px}
   }
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -105,11 +111,13 @@
 <body>
 <div class="wrap">
 
+<div id="err"></div>
+
 <header class="top">
   <div style="flex:1 1 240px">
     <h1>실적회의 문안 생성기</h1>
     <p class="sub"><a href="/" style="color:#1F5FA8;text-decoration:none">← 성과리포트로 돌아가기</a></p>
-    <p class="sub">회의를 고르면 대상월과 마감 단계, 예상 차수가 자동으로 정해집니다.</p>
+    <p class="sub">국내·해외 × 덴탈·메디컬·에스테틱으로 나눠 입력하면 문장이 완성됩니다.</p>
   </div>
   <div class="ctrls">
     <label class="ctrl"><span>회의</span>
@@ -124,6 +132,12 @@
     </label>
     <label class="ctrl"><span>회의 월</span>
       <select id="month"></select>
+    </label>
+    <label class="ctrl"><span>문안 상세도</span>
+      <select id="detail">
+        <option value="biz" selected>사업분야까지</option>
+        <option value="region">국내·해외까지</option>
+      </select>
     </label>
     <label class="ctrl"><span>입력 단위</span>
       <select id="inunit">
@@ -153,33 +167,11 @@
         <th>구분</th>
         <th id="th-c1"></th>
         <th id="th-c2"></th>
-        <th id="th-c3" class="cc3"></th>
+        <th id="th-c3"></th>
         <th id="th-cd">이번 변동</th>
       </tr>
     </thead>
-    <tbody>
-      <tr>
-        <td>국내 <span class="tag auto">SalesOps 자동</span></td>
-        <td><input class="num" id="c_dom_1" inputmode="numeric" placeholder="0"></td>
-        <td><input class="num" id="c_dom_2" inputmode="numeric" placeholder="0"></td>
-        <td class="cc3"><input class="num" id="c_dom_3" inputmode="numeric" placeholder="0"></td>
-        <td class="delta" id="c_dom_d">—</td>
-      </tr>
-      <tr>
-        <td>해외 <span class="tag manual">수기 입력</span></td>
-        <td><input class="num" id="c_ovs_1" inputmode="numeric" placeholder="0"></td>
-        <td><input class="num" id="c_ovs_2" inputmode="numeric" placeholder="0"></td>
-        <td class="cc3"><input class="num" id="c_ovs_3" inputmode="numeric" placeholder="0"></td>
-        <td class="delta" id="c_ovs_d">—</td>
-      </tr>
-      <tr class="total">
-        <th>합계</th>
-        <td id="c_tot_1">—</td>
-        <td id="c_tot_2">—</td>
-        <td id="c_tot_3" class="cc3">—</td>
-        <td class="delta" id="c_tot_d">—</td>
-      </tr>
-    </tbody>
+    <tbody id="c_body"></tbody>
   </table>
   <div class="prog hide" id="prog-close"></div>
 
@@ -204,33 +196,11 @@
         <th>구분</th>
         <th id="th-f1"></th>
         <th id="th-f2"></th>
-        <th id="th-f3" class="fc3"></th>
+        <th id="th-f3"></th>
         <th id="th-fd">이번 변동</th>
       </tr>
     </thead>
-    <tbody>
-      <tr>
-        <td>국내 <span class="tag auto">SalesOps 자동</span></td>
-        <td><input class="num" id="f_dom_1" inputmode="numeric" placeholder="0"></td>
-        <td><input class="num" id="f_dom_2" inputmode="numeric" placeholder="0"></td>
-        <td class="fc3"><input class="num" id="f_dom_3" inputmode="numeric" placeholder="0"></td>
-        <td class="delta" id="f_dom_d">—</td>
-      </tr>
-      <tr>
-        <td>해외 <span class="tag manual">수기 입력</span></td>
-        <td><input class="num" id="f_ovs_1" inputmode="numeric" placeholder="0"></td>
-        <td><input class="num" id="f_ovs_2" inputmode="numeric" placeholder="0"></td>
-        <td class="fc3"><input class="num" id="f_ovs_3" inputmode="numeric" placeholder="0"></td>
-        <td class="delta" id="f_ovs_d">—</td>
-      </tr>
-      <tr class="total">
-        <th>합계</th>
-        <td id="f_tot_1">—</td>
-        <td id="f_tot_2">—</td>
-        <td id="f_tot_3" class="fc3">—</td>
-        <td class="delta" id="f_tot_d">—</td>
-      </tr>
-    </tbody>
+    <tbody id="f_body"></tbody>
   </table>
   <div class="prog hide" id="prog-fcst"></div>
 
@@ -261,10 +231,10 @@
   <button class="copy" id="copyAll">전체 복사</button>
 
   <p class="note">
-    <b>회의 주기</b>는 25일 가마감 → 익월 5일 1차 실적회의 → 익월 15일 2차 실적회의로 돌아갑니다. 회의를 바꾸면 대상월과 표시 차수가 함께 바뀝니다.<br>
-    <b>차수는 누적으로 표시됩니다.</b> 3차를 보실 때 1차·2차가 함께 나오고, 표 아래에 차수 진행 흐름이 한 줄로 정리됩니다. 진한 열이 이번 회의에서 보고하는 값입니다.<br>
-    <b>국내 숫자는 SalesOps에서 자동으로 들어옵니다.</b> 1차·2차 예상과 잠정마감이 대상이며, 비어 있는 칸에만 채워지므로 직접 고친 값은 덮어쓰지 않습니다.<br>
-    <b>해외 전 항목</b>과 <b>가마감·확정마감·3차 예상</b>은 아직 자동 취득 경로가 없어 수기 입력입니다. 해외(MAPS) 연동이 붙으면 해외 칸이 자동으로 채워지는 자리입니다.<br>
+    <b>회의 주기</b>는 25일 가마감 → 익월 5일 1차 실적회의 → 익월 15일 2차 실적회의로 돌아갑니다.<br>
+    <b>입력은 국내·해외 × 덴탈·메디컬·에스테틱 6줄</b>이고 소계와 합계는 자동 계산됩니다. 문안 상세도를 바꾸면 문장에 사업분야를 넣을지 국내·해외까지만 쓸지 정할 수 있습니다.<br>
+    <b>국내 숫자는 SalesOps에서 사업분야별로 자동으로 들어옵니다.</b> 1차·2차 예상과 잠정마감이 대상이며, 비어 있는 칸에만 채워지므로 직접 고친 값은 덮어쓰지 않습니다.<br>
+    <b>해외 전 항목</b>과 <b>가마감·확정마감·3차 예상</b>은 아직 자동 취득 경로가 없어 수기 입력입니다.<br>
     입력값은 회의·연·월별로 이 브라우저에만 저장됩니다.
   </p>
 </div>
@@ -272,27 +242,33 @@
 </div>
 
 <script>
+window.onerror = function(msg, src, line, col){
+  var e = document.getElementById("err");
+  if (e){ e.style.display = "block"; e.textContent = "화면 오류: " + msg + " (" + line + ":" + col + ")"; }
+};
 (function(){
   var SEED = __SEED_JSON__;
 
-  // 회의별 구성. cols = 표에 표시할 열 라벨, cur = 이번 회의가 보고하는 열 번호(1-base)
+  var BIZ = ["덴탈","메디컬","에스테틱"];
+  var SCOPES = [["dom","국내"],["ovs","해외"]];
+
   var MEET = {
     pre: {
       label:"가마감 회의", when:"25일경",
       close:{off:0,  cols:["3차 예상","가마감"], cur:2, word:"가마감"},
-      fcst: {off:1,  cols:["사업계획","1차 예상"], cur:2, round:1},
+      fcst: {off:1,  cols:["사업계획","1차 예상"], cur:2},
       tol:false
     },
     r1: {
       label:"1차 실적회의", when:"5일경",
       close:{off:-1, cols:["3차 가마감","마감(잠정)"], cur:2, word:"잠정마감"},
-      fcst: {off:0,  cols:["1차 예상","2차 예상"], cur:2, round:2},
+      fcst: {off:0,  cols:["1차 예상","2차 예상"], cur:2},
       tol:false
     },
     r2: {
       label:"2차 실적회의", when:"15일경",
       close:{off:-1, cols:["3차 가마감","마감(잠정)","마감(확정)"], cur:3, word:"확정마감"},
-      fcst: {off:0,  cols:["1차 예상","2차 예상","3차 예상"], cur:3, round:3},
+      fcst: {off:0,  cols:["1차 예상","2차 예상","3차 예상"], cur:3},
       tol:true
     }
   };
@@ -343,6 +319,7 @@
     return {d:d, r:r, text:s, word: d>0?"증가":(d<0?"감소":"보합")};
   }
   function paintDelta(el, info){
+    if (!el) return;
     if (!info){ el.textContent = "—"; el.className = "delta flat"; return; }
     el.textContent = info.text;
     el.className = "delta " + (info.d>0?"up":(info.d<0?"down":"flat"));
@@ -351,27 +328,55 @@
     var t = m - 1 + off, ny = y + Math.floor(t/12), nm = ((t%12)+12)%12 + 1;
     return {y:ny, m:nm};
   }
-  function sum(a, b){ return (a===null && b===null) ? null : (a||0) + (b||0); }
+  function addv(a, b){ return (a===null && b===null) ? null : (a||0) + (b||0); }
 
+  // ---- 표 뼈대 생성 ----
+  function buildBody(pfx){
+    var h = "";
+    for (var s=0;s<SCOPES.length;s++){
+      var sk = SCOPES[s][0], sl = SCOPES[s][1];
+      for (var b=0;b<BIZ.length;b++){
+        h += "<tr><td>" + sl + " " + BIZ[b] +
+             (sk==="dom" ? " <span class='tag auto'>자동</span>" : " <span class='tag manual'>수기</span>") + "</td>";
+        for (var j=1;j<=3;j++){
+          h += "<td class='c" + j + "'><input class='num' inputmode='numeric' placeholder='0' id='" +
+               pfx + "_" + sk + "_" + b + "_" + j + "'></td>";
+        }
+        h += "<td class='delta' id='" + pfx + "_" + sk + "_" + b + "_d'>—</td></tr>";
+      }
+      h += "<tr class='sub'><th>" + sl + " 소계</th>";
+      for (var j2=1;j2<=3;j2++) h += "<td class='c" + j2 + "' id='" + pfx + "_" + sk + "_sub_" + j2 + "'>—</td>";
+      h += "<td class='delta' id='" + pfx + "_" + sk + "_sub_d'>—</td></tr>";
+    }
+    h += "<tr class='total'><th>합계</th>";
+    for (var j3=1;j3<=3;j3++) h += "<td class='c" + j3 + "' id='" + pfx + "_tot_" + j3 + "'>—</td>";
+    h += "<td class='delta' id='" + pfx + "_tot_d'>—</td></tr>";
+    $(pfx + "_body").innerHTML = h;
+  }
+
+  // ---- 변동 요인 ----
   function factorRow(target, data){
     data = data || {};
     var row = document.createElement("div");
     row.className = "frow";
-    var scope = document.createElement("select");
-    ["국내","해외"].forEach(function(o){ var op=document.createElement("option"); op.textContent=o; scope.appendChild(op); });
-    scope.value = data.scope || "국내"; scope.className = "scope";
+    function sel(cls, opts, val){
+      var s = document.createElement("select"); s.className = cls;
+      opts.forEach(function(o){ var op=document.createElement("option"); op.textContent=o; s.appendChild(op); });
+      s.value = val || opts[0];
+      return s;
+    }
+    var scope = sel("scope", ["국내","해외"], data.scope);
+    var biz = sel("biz", ["전체"].concat(BIZ), data.biz);
     var who = document.createElement("input");
     who.type="text"; who.className="who"; who.placeholder="대상 (예: 말레이시아 A1 Bone Chip)"; who.value = data.who || "";
     var amt = document.createElement("input");
     amt.type="text"; amt.className="amt num"; amt.inputMode="numeric"; amt.placeholder="금액"; amt.value = data.amt || "";
-    var why = document.createElement("select");
-    why.className="why";
-    Object.keys(REASONS).forEach(function(k){ var op=document.createElement("option"); op.textContent=k; why.appendChild(op); });
-    why.value = data.why || "확정이월";
+    var why = sel("why", Object.keys(REASONS), data.why);
     var del = document.createElement("button");
     del.className="x del"; del.type="button"; del.textContent="×"; del.setAttribute("aria-label","요인 삭제");
     del.addEventListener("click", function(){ row.remove(); render(); });
-    row.appendChild(scope); row.appendChild(who); row.appendChild(amt); row.appendChild(why); row.appendChild(del);
+    row.appendChild(scope); row.appendChild(biz); row.appendChild(who);
+    row.appendChild(amt); row.appendChild(why); row.appendChild(del);
     $(target).appendChild(row);
     return row;
   }
@@ -381,23 +386,25 @@
       var amt = amtOf(r.querySelector(".amt").value);
       var who = r.querySelector(".who").value.trim();
       if (amt === null && !who) return;
-      out.push({scope:r.querySelector(".scope").value, who:who, amt:amt, why:r.querySelector(".why").value});
+      out.push({scope:r.querySelector(".scope").value, biz:r.querySelector(".biz").value,
+                who:who, amt:amt, why:r.querySelector(".why").value});
     });
     return out;
   }
   function rawFactors(target){
     var out = [];
     document.querySelectorAll("#"+target+" .frow").forEach(function(r){
-      out.push({scope:r.querySelector(".scope").value, who:r.querySelector(".who").value,
-                amt:r.querySelector(".amt").value, why:r.querySelector(".why").value});
+      out.push({scope:r.querySelector(".scope").value, biz:r.querySelector(".biz").value,
+                who:r.querySelector(".who").value, amt:r.querySelector(".amt").value,
+                why:r.querySelector(".why").value});
     });
     return out;
   }
   function factorPhrase(f){
     var meta = REASONS[f.why] || REASONS["기타"];
     var amtTxt = f.amt === null ? "" : fmtAbs(f.amt);
-    var who = (f.scope === "해외" ? "해외 " : "국내 ") + (f.who || "");
-    return meta.tpl.replace("{who}", who.trim()).replace("{amt}", amtTxt).replace(/\s+/g," ").trim();
+    var head = f.scope + (f.biz && f.biz !== "전체" ? " " + f.biz : "") + " " + (f.who || "");
+    return meta.tpl.replace("{who}", head.trim()).replace("{amt}", amtTxt).replace(/\s+/g," ").trim();
   }
   function joinPhrases(list){
     if (!list.length) return "";
@@ -405,53 +412,68 @@
     return list.slice(0,-1).join(", ") + ", " + list[list.length-1];
   }
 
-  function doSection(pfx, spec, colClass, thPrefix, progId){
+  // ---- 섹션 계산 ----
+  function doSection(pfx, spec, thPrefix, progId){
     var n = spec.cols.length, cur = spec.cur;
 
     for (var i=1;i<=3;i++){
       var th = $(thPrefix + i);
       if (i <= n) th.textContent = spec.cols[i-1];
       th.className = (i === cur) ? "cur" : "";
-      if (i === 3) th.className += " " + colClass;
-      if (i === 3) th.style.display = (n >= 3) ? "" : "none";
+      th.style.display = (i <= n) ? "" : "none";
     }
     $(thPrefix + "d").textContent = spec.cols[cur-2] + " 대비";
 
-    var dom = [], ovs = [], tot = [];
     for (var j=1;j<=3;j++){
-      var d = (j<=n) ? amtOf($(pfx+"_dom_"+j).value) : null;
-      var o = (j<=n) ? amtOf($(pfx+"_ovs_"+j).value) : null;
-      dom.push(d); ovs.push(o); tot.push(sum(d,o));
-      var totCell = $(pfx+"_tot_"+j);
-      totCell.textContent = fmt(tot[j-1]);
-      totCell.className = (j===cur ? "cur " : "") + (j===3 ? colClass : "");
-      var dc = $(pfx+"_dom_"+j).parentNode, oc = $(pfx+"_ovs_"+j).parentNode;
-      dc.className = (j===cur ? "cur " : "") + (j===3 ? colClass : "");
-      oc.className = (j===cur ? "cur " : "") + (j===3 ? colClass : "");
-      if (j === 3){
-        var show = (n >= 3) ? "" : "none";
-        dc.style.display = show; oc.style.display = show; totCell.style.display = show;
+      var show = (j <= n) ? "" : "none";
+      var isCur = (j === cur);
+      var cells = document.querySelectorAll("#" + pfx + "_body .c" + j);
+      for (var q=0;q<cells.length;q++){
+        cells[q].style.display = show;
+        cells[q].className = "c" + j + (isCur ? " cur" : "");
       }
     }
 
-    var dD = deltaText(dom[cur-1], dom[cur-2]);
-    var oD = deltaText(ovs[cur-1], ovs[cur-2]);
+    var data = {};
+    for (var s=0;s<SCOPES.length;s++){
+      var sk = SCOPES[s][0];
+      var rows = [], sub = [null,null,null];
+      for (var b=0;b<BIZ.length;b++){
+        var arr = [];
+        for (var k=1;k<=3;k++){
+          var v = (k <= n) ? amtOf($(pfx+"_"+sk+"_"+b+"_"+k).value) : null;
+          arr.push(v);
+          if (v !== null) sub[k-1] = (sub[k-1] === null ? 0 : sub[k-1]) + v;
+        }
+        rows.push(arr);
+        paintDelta($(pfx+"_"+sk+"_"+b+"_d"), deltaText(arr[cur-1], arr[cur-2]));
+      }
+      for (var k2=1;k2<=3;k2++) $(pfx+"_"+sk+"_sub_"+k2).textContent = fmt(sub[k2-1]);
+      var sD = deltaText(sub[cur-1], sub[cur-2]);
+      paintDelta($(pfx+"_"+sk+"_sub_d"), sD);
+      data[sk] = {rows:rows, sub:sub, sD:sD};
+    }
+
+    var tot = [];
+    for (var t=0;t<3;t++){
+      tot.push(addv(data.dom.sub[t], data.ovs.sub[t]));
+      $(pfx+"_tot_"+(t+1)).textContent = fmt(tot[t]);
+    }
     var tD = deltaText(tot[cur-1], tot[cur-2]);
-    paintDelta($(pfx+"_dom_d"), dD); paintDelta($(pfx+"_ovs_d"), oD); paintDelta($(pfx+"_tot_d"), tD);
+    paintDelta($(pfx+"_tot_d"), tD);
 
     var progEl = $(progId), filled = 0;
-    for (var k=0;k<n;k++){ if (tot[k] !== null) filled++; }
+    for (var p=0;p<n;p++){ if (tot[p] !== null) filled++; }
     if (filled >= 2){
-      var parts = [];
-      for (var q=0;q<n;q++){
-        if (tot[q] === null) continue;
-        var seg = spec.cols[q] + " <b>" + fmt(tot[q]) + "</b>";
-        var prevIdx = -1;
-        for (var p=q-1;p>=0;p--){ if (tot[p] !== null){ prevIdx = p; break; } }
+      var parts = [], prevIdx = -1;
+      for (var q2=0;q2<n;q2++){
+        if (tot[q2] === null) continue;
+        var seg = spec.cols[q2] + " <b>" + fmt(tot[q2]) + "</b>";
         if (prevIdx >= 0){
-          var dd = tot[q] - tot[prevIdx];
+          var dd = tot[q2] - tot[prevIdx];
           seg += " (" + sgn(dd) + fmtAbs(dd) + ")";
         }
+        prevIdx = q2;
         parts.push(seg);
       }
       progEl.innerHTML = "차수 진행 &nbsp;" + parts.join(" &nbsp;→&nbsp; ");
@@ -460,11 +482,38 @@
       progEl.className = "prog hide";
     }
 
-    return {dom:dom, ovs:ovs, tot:tot, dD:dD, oD:oD, tD:tD, n:n, cur:cur};
+    return {data:data, tot:tot, tD:tD, n:n, cur:cur};
+  }
+
+  function regionSentence(S, sk, sl, detail){
+    var d = S.data[sk], cur = S.cur;
+    if (d.sub[cur-1] === null) return "";
+    var s = sl + "는 " + fmt(d.sub[cur-1]) + (d.sD ? "(" + sgn(d.sD.d) + fmtAbs(d.sD.d) + ")" : "");
+    if (detail === "biz"){
+      var parts = [];
+      for (var b=0;b<BIZ.length;b++){
+        var arr = d.rows[b];
+        if (arr[cur-1] === null) continue;
+        var bd = deltaText(arr[cur-1], arr[cur-2]);
+        parts.push(BIZ[b] + " " + fmt(arr[cur-1]) + (bd ? "(" + sgn(bd.d) + fmtAbs(bd.d) + ")" : ""));
+      }
+      if (parts.length) s += "로 " + parts.join(", ");
+    }
+    return s + "입니다.";
+  }
+
+  function trajectory(spec, tot){
+    var parts = [];
+    for (var i=0;i<spec.cols.length;i++){
+      if (tot[i] === null) continue;
+      parts.push(spec.cols[i] + " " + fmt(tot[i]));
+    }
+    return parts.length >= 3 ? " 차수 흐름은 " + parts.join(" → ") + "입니다." : "";
   }
 
   function render(){
     var cfg = MEET[$("meeting").value];
+    var detail = $("detail").value;
     var y = Number($("year").value), m = Number($("month").value);
     var cM = shift(y, m, cfg.close.off);
     var fM = shift(y, m, cfg.fcst.off);
@@ -483,8 +532,8 @@
     $("lbl_close").textContent = cM.m + "월 " + cValLabel;
     $("lbl_fcst").textContent = fM.m + "월 " + fValLabel;
 
-    var C = doSection("c", cfg.close, "cc3", "th-c", "prog-close");
-    var F = doSection("f", cfg.fcst,  "fc3", "th-f", "prog-fcst");
+    var C = doSection("c", cfg.close, "th-c", "prog-close");
+    var F = doSection("f", cfg.fcst,  "th-f", "prog-fcst");
 
     var tolTxt = "";
     $("tolbox").className = cfg.tol ? "tolbox on" : "tolbox";
@@ -510,28 +559,18 @@
 
     var cf = readFactors("c_factors"), ff = readFactors("f_factors");
 
-    function trajectory(spec, tot){
-      var parts = [];
-      for (var i=0;i<spec.cols.length;i++){
-        if (tot[i] === null) continue;
-        parts.push(spec.cols[i] + " " + fmt(tot[i]));
-      }
-      return parts.length >= 3 ? " 차수 흐름은 " + parts.join(" → ") + "입니다." : "";
-    }
-
     var closeTxt = "";
     if (C.tot[C.cur-1] !== null){
-      var base = cfg.close.cols[C.cur-2];
       closeTxt = cM.m + "월 " + cfg.close.word + "은 " + fmt(C.tot[C.cur-1]);
       if (C.tD){
-        closeTxt += "으로, " + base + " " + fmt(C.tot[C.cur-2]) + " 대비 " + sgn(C.tD.d) + fmtAbs(C.tD.d);
+        closeTxt += "으로, " + cfg.close.cols[C.cur-2] + " " + fmt(C.tot[C.cur-2]) + " 대비 " + sgn(C.tD.d) + fmtAbs(C.tD.d);
         if (C.tD.r !== null) closeTxt += "(" + Math.abs(C.tD.r).toFixed(1) + "%)";
         closeTxt += " " + C.tD.word + "했습니다.";
       } else { closeTxt += "입니다."; }
-      var s1 = [];
-      if (C.dom[C.cur-1] !== null) s1.push("국내 " + fmt(C.dom[C.cur-1]) + (C.dD ? "(" + sgn(C.dD.d) + fmtAbs(C.dD.d) + ")" : ""));
-      if (C.ovs[C.cur-1] !== null) s1.push("해외 " + fmt(C.ovs[C.cur-1]) + (C.oD ? "(" + sgn(C.oD.d) + fmtAbs(C.oD.d) + ")" : ""));
-      if (s1.length) closeTxt += " " + s1.join(", ") + "입니다.";
+      var cs1 = regionSentence(C, "dom", "국내", detail);
+      var cs2 = regionSentence(C, "ovs", "해외", detail);
+      if (cs1) closeTxt += " " + cs1;
+      if (cs2) closeTxt += " " + cs2;
       closeTxt += trajectory(cfg.close, C.tot);
       var cp = cf.map(factorPhrase).filter(Boolean);
       if (cp.length) closeTxt += " 주요 변동 요인은 " + joinPhrases(cp) + "된 데 따른 것입니다.";
@@ -540,17 +579,16 @@
 
     var fcstTxt = "";
     if (F.tot[F.cur-1] !== null){
-      var fbase = cfg.fcst.cols[F.cur-2];
       fcstTxt = fM.m + "월 " + fValLabel + "은 " + fmt(F.tot[F.cur-1]);
       if (F.tD){
-        fcstTxt += "으로, " + fbase + " " + fmt(F.tot[F.cur-2]) + " 대비 " + sgn(F.tD.d) + fmtAbs(F.tD.d);
+        fcstTxt += "으로, " + cfg.fcst.cols[F.cur-2] + " " + fmt(F.tot[F.cur-2]) + " 대비 " + sgn(F.tD.d) + fmtAbs(F.tD.d);
         if (F.tD.r !== null) fcstTxt += "(" + Math.abs(F.tD.r).toFixed(1) + "%)";
         fcstTxt += " " + F.tD.word + "했습니다.";
       } else { fcstTxt += "입니다."; }
-      var s2 = [];
-      if (F.dom[F.cur-1] !== null) s2.push("국내 " + fmt(F.dom[F.cur-1]) + (F.dD ? "(" + sgn(F.dD.d) + fmtAbs(F.dD.d) + ")" : ""));
-      if (F.ovs[F.cur-1] !== null) s2.push("해외 " + fmt(F.ovs[F.cur-1]) + (F.oD ? "(" + sgn(F.oD.d) + fmtAbs(F.oD.d) + ")" : ""));
-      if (s2.length) fcstTxt += " " + s2.join(", ") + "입니다.";
+      var fs1 = regionSentence(F, "dom", "국내", detail);
+      var fs2 = regionSentence(F, "ovs", "해외", detail);
+      if (fs1) fcstTxt += " " + fs1;
+      if (fs2) fcstTxt += " " + fs2;
       fcstTxt += trajectory(cfg.fcst, F.tot);
       var dp = ff.filter(function(f){return f.scope==="국내";}).map(factorPhrase).filter(Boolean);
       var op = ff.filter(function(f){return f.scope==="해외";}).map(factorPhrase).filter(Boolean);
@@ -589,6 +627,113 @@
     try { document.execCommand("copy"); cb(); } catch(e){}
     document.body.removeChild(ta);
   }
+
+  function allFields(){
+    var ids = ["tol"];
+    ["c","f"].forEach(function(pfx){
+      SCOPES.forEach(function(sc){
+        for (var b=0;b<BIZ.length;b++){
+          for (var j=1;j<=3;j++) ids.push(pfx+"_"+sc[0]+"_"+b+"_"+j);
+        }
+      });
+    });
+    return ids;
+  }
+  var FIELDS = [];
+  var saveTimer = null;
+  function stateKey(){
+    return "perfnarr3:" + $("meeting").value + ":" + $("year").value + "-" + ("0" + $("month").value).slice(-2);
+  }
+  function collect(){
+    var o = {unit:$("unit").value, inunit:$("inunit").value, detail:$("detail").value, fields:{},
+             cf:rawFactors("c_factors"), ff:rawFactors("f_factors")};
+    FIELDS.forEach(function(id){ if ($(id)) o.fields[id] = $(id).value; });
+    return o;
+  }
+  function save(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function(){
+      try { localStorage.setItem(stateKey(), JSON.stringify(collect())); } catch(e){}
+    }, 300);
+  }
+  function ym(y,m){ return y + "-" + (m<10 ? "0" : "") + m; }
+  function fillSection(pfx, cols, d){
+    if (!d) return;
+    var f = inF();
+    for (var i=0;i<cols.length;i++){
+      var lab = cols[i], key = null;
+      if (lab.indexOf("1차 예상") === 0) key = "first";
+      else if (lab.indexOf("2차 예상") === 0) key = "second";
+      else if (lab.indexOf("마감(잠정)") === 0) key = "close";
+      if (!key) continue;
+      for (var b=0;b<BIZ.length;b++){
+        var rec = d[BIZ[b]];
+        if (!rec) continue;
+        var v = rec[key];
+        if (v === null || v === undefined) continue;
+        var el = $(pfx + "_dom_" + b + "_" + (i+1));
+        if (el && !el.value) el.value = commaLoose(v / f);
+      }
+    }
+  }
+  function seed(){
+    var cfg = MEET[$("meeting").value];
+    var y = Number($("year").value), m = Number($("month").value);
+    var cM = shift(y, m, cfg.close.off), fM = shift(y, m, cfg.fcst.off);
+    fillSection("c", cfg.close.cols, SEED[ym(cM.y, cM.m)]);
+    fillSection("f", cfg.fcst.cols, SEED[ym(fM.y, fM.m)]);
+  }
+  function clearAll(){
+    FIELDS.forEach(function(id){ if (id !== "tol" && $(id)) $(id).value = ""; });
+    $("c_factors").innerHTML = ""; $("f_factors").innerHTML = "";
+  }
+  var prevInF = 1;
+  function ensureRows(){
+    prevInF = inF();
+    if (!document.querySelector("#c_factors .frow")) factorRow("c_factors");
+    if (!document.querySelector("#f_factors .frow")) factorRow("f_factors");
+  }
+  function load(){
+    var o = null;
+    try { var raw = localStorage.getItem(stateKey()); if (raw) o = JSON.parse(raw); } catch(e){}
+    clearAll();
+    if (o){
+      if (o.unit) $("unit").value = o.unit;
+      if (o.inunit) $("inunit").value = o.inunit;
+      if (o.detail) $("detail").value = o.detail;
+      FIELDS.forEach(function(id){ if (o.fields && o.fields[id] !== undefined && $(id)) $(id).value = o.fields[id]; });
+      (o.cf||[]).forEach(function(f){ factorRow("c_factors", f); });
+      (o.ff||[]).forEach(function(f){ factorRow("f_factors", f); });
+    }
+    prevInF = inF();
+    seed(); ensureRows(); render();
+  }
+  function convertInputs(){
+    var f = inF();
+    if (f === prevInF) return;
+    var els = document.querySelectorAll("input.num");
+    for (var i=0;i<els.length;i++){
+      var n = parseNum(els[i].value);
+      if (n === null) continue;
+      els[i].value = commaLoose(n * prevInF / f);
+    }
+    prevInF = f;
+  }
+
+  (function initMonths(){
+    var sel = $("month");
+    for (var i=1;i<=12;i++){
+      var op = document.createElement("option");
+      op.value = i; op.textContent = i + "월";
+      if (i === 9) op.selected = true;
+      sel.appendChild(op);
+    }
+  })();
+
+  buildBody("c");
+  buildBody("f");
+  FIELDS = allFields();
+
   document.querySelectorAll("button.copy[data-src]").forEach(function(b){
     b.addEventListener("click", function(){
       var el = $(b.getAttribute("data-src"));
@@ -603,91 +748,6 @@
     });
     if (out.length) copyText(out.join("\n\n"), $("copyAll"));
   });
-
-  var FIELDS = ["c_dom_1","c_dom_2","c_dom_3","c_ovs_1","c_ovs_2","c_ovs_3","tol",
-                "f_dom_1","f_dom_2","f_dom_3","f_ovs_1","f_ovs_2","f_ovs_3"];
-  var saveTimer = null;
-  function stateKey(){
-    return "perfnarr2:" + $("meeting").value + ":" + $("year").value + "-" + ("0" + $("month").value).slice(-2);
-  }
-  function collect(){
-    var o = {unit:$("unit").value, inunit:$("inunit").value, fields:{},
-             cf:rawFactors("c_factors"), ff:rawFactors("f_factors")};
-    FIELDS.forEach(function(id){ o.fields[id] = $(id).value; });
-    return o;
-  }
-  function save(){
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(function(){
-      try { localStorage.setItem(stateKey(), JSON.stringify(collect())); } catch(e){}
-    }, 300);
-  }
-  function ym(y,m){ return y + "-" + (m<10 ? "0" : "") + m; }
-  function fillSection(pfx, cols, d){
-    if (!d) return;
-    var f = inF();
-    for (var i=0;i<cols.length;i++){
-      var lab = cols[i], v = null;
-      if (lab.indexOf("1차 예상") === 0) v = d.first;
-      else if (lab.indexOf("2차 예상") === 0) v = d.second;
-      else if (lab.indexOf("마감(잠정)") === 0) v = d.close;
-      if (v === null || v === undefined) continue;
-      var el = $(pfx + "_dom_" + (i+1));
-      if (el && !el.value) el.value = commaLoose(v / f);
-    }
-  }
-  function seed(){
-    var cfg = MEET[$("meeting").value];
-    var y = Number($("year").value), m = Number($("month").value);
-    var cM = shift(y, m, cfg.close.off), fM = shift(y, m, cfg.fcst.off);
-    fillSection("c", cfg.close.cols, SEED[ym(cM.y, cM.m)]);
-    fillSection("f", cfg.fcst.cols, SEED[ym(fM.y, fM.m)]);
-  }
-  function clearAll(){
-    FIELDS.forEach(function(id){ if (id !== "tol") $(id).value = ""; });
-    $("c_factors").innerHTML = ""; $("f_factors").innerHTML = "";
-  }
-  function load(){
-    var o = null;
-    try { var raw = localStorage.getItem(stateKey()); if (raw) o = JSON.parse(raw); } catch(e){}
-    clearAll();
-    if (o){
-      if (o.unit) $("unit").value = o.unit;
-      if (o.inunit) $("inunit").value = o.inunit;
-      FIELDS.forEach(function(id){ if (o.fields && o.fields[id] !== undefined) $(id).value = o.fields[id]; });
-      (o.cf||[]).forEach(function(f){ factorRow("c_factors", f); });
-      (o.ff||[]).forEach(function(f){ factorRow("f_factors", f); });
-    }
-    prevInF = inF();
-    seed(); ensureRows(); render();
-  }
-  var prevInF = 1;
-  function ensureRows(){
-    prevInF = inF();
-    if (!document.querySelector("#c_factors .frow")) factorRow("c_factors");
-    if (!document.querySelector("#f_factors .frow")) factorRow("f_factors");
-  }
-  function convertInputs(){
-    var f = inF();
-    if (f === prevInF) return;
-    document.querySelectorAll("input.num").forEach(function(el){
-      var n = parseNum(el.value);
-      if (n === null) return;
-      el.value = commaLoose(n * prevInF / f);
-    });
-    prevInF = f;
-  }
-
-  (function initMonths(){
-    var sel = $("month");
-    for (var i=1;i<=12;i++){
-      var op = document.createElement("option");
-      op.value = i; op.textContent = i + "월";
-      if (i === 9) op.selected = true;
-      sel.appendChild(op);
-    }
-  })();
-
   document.querySelectorAll("button.add").forEach(function(b){
     b.addEventListener("click", function(){ factorRow(b.getAttribute("data-target")); });
   });
