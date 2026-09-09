@@ -1,13 +1,16 @@
 try:
-    from narrative_users_probe import app
+    from report_ui_cleanup import app
 except Exception:
     try:
-        from narrative_page import app
+        from narrative_users_probe import app
     except Exception:
         try:
-            from browser_bridge import app
+            from narrative_page import app
         except Exception:
-            from salesops_variant_probe import app
+            try:
+                from browser_bridge import app
+            except Exception:
+                from salesops_variant_probe import app
 
 if __name__ == "__main__":
     import os
