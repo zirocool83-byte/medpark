@@ -3,15 +3,16 @@
 이 파일만 고치면 PPT 표의 열이 바뀐다.
 
 label 안의 자리표시자
-  {cy} 회의 연도   {py} 전년   {cm} 당월   {pm} 전월   {nm} 익월
+  {cy} 회의 연도  {py} 전년  {cm} 당월  {pm} 전월  {nm} 익월
+  {close_m} 이 회의가 다루는 마감월. 누계 비교 구간의 끝이다.
 
 f = 리포트 필드
   ytd              26년 누계
-  prev_ytd         25년 누계
+  prev_ytd         25년 누계 (월별을 마감월까지 누적한 값. 기존 행에만 들어간다)
   yoy              증감률(누계 기준, 자동 계산)
   prev_preclose    전월 가마감
   prev_close       전월 마감(현재값. 확정 이후에는 확정마감)
-  prev_provisional 전월 잠정마감(처음 본 시점에 보존해 둔 값)
+  prev_provisional 전월 잠정마감
   first/second     당월 1차·2차 예상
   third_forecast   당월 3차 예상
   third_confirmed  당월 3차 확정
@@ -20,11 +21,13 @@ f = 리포트 필드
   second_half      하반기
 
 bold=True 인 열은 이번 회의에서 보고하는 값이라 숫자를 굵게 찍는다.
+
+누계 열에 마감월을 같이 적는다. 26년과 25년이 같은 구간인지 회의에서 바로 보이게 하기 위해서다.
 """
 
 HEAD = [
-    {"label": "{cy}년 누계", "f": "ytd"},
-    {"label": "{py}년 누계", "f": "prev_ytd"},
+    {"label": "{cy}년 누계\n(~{close_m}월)", "f": "ytd"},
+    {"label": "{py}년 누계\n(~{close_m}월)", "f": "prev_ytd"},
     {"label": "증감", "f": "yoy"},
 ]
 
@@ -76,7 +79,7 @@ def fill(label, ctx):
 
 def columns(meeting, ctx, plan=False):
     middle = (PLAN_ONLY if plan else MIDDLE).get(meeting) or MIDDLE.get("r1")
-    cols = HEAD + middle + ([] if plan else TAIL)
+    cols = (HEAD + middle + TAIL) if not plan else middle
     out = []
     for col in cols:
         item = dict(col)
