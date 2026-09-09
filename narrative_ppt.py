@@ -8,12 +8,16 @@ narrative_template.pptx 는 실제 결산회의 장표에서 실적 슬라이드
 표는 원본에서도 엑셀 캡처 이미지였으므로 자리를 비워 둔다.
 받은 파일에 엑셀 캡처를 붙이면 회의 자료가 완성된다.
 
-주의: txBody 는 <a:bodyPr>...</a:bodyPr><a:lstStyle/> 다음에 문단이 온다.
-      bodyPr 이 자식(<a:spAutoFit/>)을 가질 수 있어서 여는 태그만 잘라내면
-      XML 이 깨지고, 파워포인트는 오류를 내지 않고 그 상자를 통째로 무시한다.
-      (내용은 파일 안에 있는데 화면에는 아무것도 안 보이는 상태가 된다.)
-      그래서 bodyPr 과 lstStyle 을 통째로 살린 뒤 문단만 교체하고,
-      내보내기 전에 XML 이 실제로 파싱되는지 확인한다.
+주의 1: txBody 는 <a:bodyPr>...</a:bodyPr><a:lstStyle/> 다음에 문단이 온다.
+        bodyPr 이 자식(<a:spAutoFit/>)을 가질 수 있어서 여는 태그만 잘라내면
+        XML 이 깨지고, 파워포인트는 오류 없이 그 상자를 통째로 무시한다.
+        (내용은 파일 안에 있는데 화면에는 아무것도 안 보이는 상태가 된다.)
+        그래서 bodyPr 과 lstStyle 을 통째로 살린 뒤 문단만 교체하고,
+        내보내기 전에 XML 이 실제로 파싱되는지 확인한다.
+
+주의 2: 이 서버에는 Flask 와 gunicorn 만 설치돼 있다.
+        외부 라이브러리를 쓰면 모듈 로드가 통째로 실패해 화면에서 기능이 사라진다.
+        검사만 하고 다시 직렬화하지 않으므로 표준 라이브러리로 충분하다.
 
 문단 서식 규칙(원본에서 읽은 것)
   검정 굵게  제목            1) 매출
@@ -26,8 +30,7 @@ import io
 import re
 import zipfile
 from pathlib import Path
-
-from defusedxml import minidom
+from xml.etree import ElementTree
 
 TEMPLATE = Path(__file__).with_name("narrative_template.pptx")
 
@@ -130,7 +133,7 @@ def build(blocks):
                     tag = item.filename.split("/")[-1] + ":" + shape_name
                     (report["replaced"] if ok else report["missing"]).append(tag)
                 # 깨진 XML 은 조용히 무시되므로 반드시 여기서 걸러낸다.
-                minidom.parseString(xml)
+                ElementTree.fromstring(xml)
                 report["checked"].append(item.filename.split("/")[-1])
                 data = xml.encode("utf-8")
             out.writestr(item, data)
