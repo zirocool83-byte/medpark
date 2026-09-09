@@ -1,7 +1,7 @@
 """회의 문안 생성기 페이지.
 
 성과리포트 안에 /narrative 화면을 추가한다.
-국내 1차·2차 예상과 잠정마감은 SalesOps 스냅샷에서 자동으로 채워 넣는다.
+국내 1차·2차 예상과 잠정마감은 SalesOps 스냅샷에서 사업분야별로 채워 넣는다.
 해외와 가마감·확정마감은 화면에서 직접 입력한다.
 """
 
@@ -21,19 +21,32 @@ SNAPSHOT_DIR = Path(base.DATA_DIR)
 SNAPSHOT_RE = re.compile(r"salesops_root_live_(\d{4})_(\d{2})\.json$")
 LINK_ID = "mp-narrative-link"
 REPORT_PATHS = ("/", "/performance-report")
+FIELDS = ("first", "second", "close")
 
 
-def _domestic_totals(index):
-    rows = [v for k, v in index.items() if k[1] == "국내"]
+def _domestic_by_business(index):
+    """국내 행을 사업분야별로 합산한다. 신규·기존은 합친다."""
     out = {}
-    for field in ("first", "second", "close"):
-        vals = [r.get(field) for r in rows if isinstance(r, dict) and r.get(field) is not None]
-        out[field] = sum(vals) if vals else None
+    for key, row in index.items():
+        if not isinstance(row, dict) or len(key) != 3:
+            continue
+        business, region = key[0], key[1]
+        if region != "국내":
+            continue
+        bucket = out.setdefault(business, {f: None for f in FIELDS})
+        for field in FIELDS:
+            value = row.get(field)
+            if value is None:
+                continue
+            bucket[field] = value if bucket[field] is None else bucket[field] + value
     return out
 
 
 def _seed():
-    """스냅샷에 있는 모든 월의 국내 합계를 {"YYYY-MM": {...}} 형태로 만든다."""
+    """스냅샷에 있는 모든 월의 국내 사업분야별 값을 만든다.
+
+    형태: {"YYYY-MM": {"덴탈": {"first":..,"second":..,"close":..}, ...}}
+    """
     seed = {}
     try:
         for path in SNAPSHOT_DIR.glob("salesops_root_live_*.json"):
@@ -44,9 +57,9 @@ def _seed():
             index, _saved = live._load_snapshot(year, month)
             if not index:
                 continue
-            totals = _domestic_totals(index)
-            if any(v is not None for v in totals.values()):
-                seed["%04d-%02d" % (year, month)] = totals
+            by_business = _domestic_by_business(index)
+            if by_business:
+                seed["%04d-%02d" % (year, month)] = by_business
     except Exception:
         pass
     return seed
@@ -67,17 +80,21 @@ def narrative_page():
     html = html.replace("__SEED_JSON__", json.dumps(_seed(), ensure_ascii=False))
     resp = make_response(html)
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
-    resp.headers["X-MedPark-Narrative"] = "narrative-1.0"
+    resp.headers["X-MedPark-Narrative"] = "narrative-2.0"
     return resp
 
 
 @app.get("/narrative-health")
 def narrative_health():
     seed = _seed()
+    shape = {}
+    for period, businesses in seed.items():
+        shape[period] = sorted(businesses.keys())
     return {
         "template_exists": TEMPLATE.exists(),
         "template_bytes": TEMPLATE.stat().st_size if TEMPLATE.exists() else 0,
         "seed_months": sorted(seed.keys()),
+        "seed_businesses": shape,
         "seed": seed,
     }
 
