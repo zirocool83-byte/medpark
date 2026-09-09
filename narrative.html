@@ -124,11 +124,7 @@
   </div>
   <div class="ctrls">
     <label class="ctrl"><span>회의</span>
-      <select id="meeting">
-        <option value="pre">가마감 회의 (25일경)</option>
-        <option value="r1" selected>1차 실적회의 (5일경)</option>
-        <option value="r2">2차 실적회의 (15일경)</option>
-      </select>
+      <select id="meeting"></select>
     </label>
     <label class="ctrl"><span>회의 연도</span>
       <select id="year"><option>2026</option><option>2027</option></select>
@@ -239,9 +235,10 @@
 
   <p class="note">
     <b>회의 주기</b>는 25일 가마감 → 익월 5일 1차 실적회의 → 익월 15일 2차 실적회의로 돌아갑니다.<br>
-    <b>값은 성과리포트에서 그대로 가져옵니다.</b> 국내·해외 구분 없이 리포트에 있는 1차·2차·3차 예상과 잠정마감이 지역·사업분야별로 채워집니다. 비어 있는 칸은 리포트에도 아직 값이 없는 항목이니 직접 넣으시면 됩니다.<br>
+    <b>값은 성과리포트에서 그대로 가져옵니다.</b> 국내·해외 구분 없이 리포트에 있는 값이 지역·사업분야별로 채워집니다. 비어 있는 칸은 리포트에도 아직 값이 없는 항목이니 직접 넣으시면 됩니다.<br>
     <b>직접 고친 값은 덮어쓰지 않습니다.</b> 서버 값으로 되돌리려면 위의 다시 채우기 단추를 누르십시오.<br>
     <b>입력은 국내·해외 × 덴탈·메디컬·에스테틱 6줄</b>이고 소계와 합계는 자동 계산됩니다. 문안 상세도를 바꾸면 문장에 사업분야를 넣을지 국내·해외까지만 쓸지 정할 수 있습니다.<br>
+    회의 구성이나 열 이름을 바꾸려면 <b>narrative_config.py</b> 한 파일만 고치면 됩니다.<br>
     입력값은 회의·연·월별로 이 브라우저에만 저장됩니다.
   </p>
 </div>
@@ -254,38 +251,14 @@ window.onerror = function(msg, src, line, col){
   if (e){ e.style.display = "block"; e.textContent = "화면 오류: " + msg + " (" + line + ":" + col + ")"; }
 };
 (function(){
+  var CFG = __CONFIG_JSON__;
   var SEED = {};
 
   var BIZ = ["덴탈","메디컬","에스테틱"];
   var SCOPES = [["dom","국내"],["ovs","해외"]];
-
-  var MEET = {
-    pre: {
-      label:"가마감 회의", when:"25일경",
-      close:{off:0,  cols:["3차 예상","가마감"], cur:2, word:"가마감"},
-      fcst: {off:1,  cols:["사업계획","1차 예상"], cur:2},
-      tol:false
-    },
-    r1: {
-      label:"1차 실적회의", when:"5일경",
-      close:{off:-1, cols:["3차 가마감","마감(잠정)"], cur:2, word:"잠정마감"},
-      fcst: {off:0,  cols:["1차 예상","2차 예상"], cur:2},
-      tol:false
-    },
-    r2: {
-      label:"2차 실적회의", when:"15일경",
-      close:{off:-1, cols:["3차 가마감","마감(잠정)","마감(확정)"], cur:3, word:"확정마감"},
-      fcst: {off:0,  cols:["1차 예상","2차 예상","3차 예상"], cur:3},
-      tol:true
-    }
-  };
-
-  var FIELD_OF = {
-    "1차 예상":"first",
-    "2차 예상":"second",
-    "3차 예상":"third_forecast",
-    "마감(잠정)":"close"
-  };
+  var MEET = CFG.meetings || {};
+  var ORDER = CFG.order || Object.keys(MEET);
+  var FIELD_OF = CFG.field_of || {};
 
   var REASONS = {
     "확정이월":     {tpl:"{who} {amt}이 확정이월되며 제외"},
@@ -344,6 +317,7 @@ window.onerror = function(msg, src, line, col){
   }
   function ym(y,m){ return y + "-" + (m<10 ? "0" : "") + m; }
   function addv(a, b){ return (a===null && b===null) ? null : (a||0) + (b||0); }
+  function cfgNow(){ return MEET[$("meeting").value] || MEET[ORDER[0]]; }
 
   function buildBody(pfx){
     var h = "";
@@ -523,7 +497,7 @@ window.onerror = function(msg, src, line, col){
   }
 
   function render(){
-    var cfg = MEET[$("meeting").value];
+    var cfg = cfgNow();
     var detail = $("detail").value;
     var y = Number($("year").value), m = Number($("month").value);
     var cM = shift(y, m, cfg.close.off);
@@ -531,7 +505,8 @@ window.onerror = function(msg, src, line, col){
     var cValLabel = cfg.close.cols[cfg.close.cur-1];
     var fValLabel = cfg.fcst.cols[cfg.fcst.cur-1];
 
-    $("cycle").innerHTML = "회의 주기 &nbsp;<b>25일 가마감</b> → <b>익월 5일 1차</b> → <b>익월 15일 2차</b> → 다시 25일 가마감" +
+    var chain = ORDER.map(function(k){ return MEET[k].label + " " + MEET[k].when; }).join(" → ");
+    $("cycle").innerHTML = "회의 주기 &nbsp;<b>" + chain + "</b> → 다시 처음으로" +
       "<br>지금 선택: <span class=\"now\">" + y + "년 " + m + "월 " + cfg.label + " (" + cfg.when + ")</span> · " +
       "보고 대상 <span class=\"now\">" + cM.m + "월 " + cValLabel + "</span> + " +
       "<span class=\"now\">" + fM.m + "월 " + fValLabel + "</span>";
@@ -555,16 +530,16 @@ window.onerror = function(msg, src, line, col){
         var ar = Math.abs(C.tD.r);
         if (ar <= tol){
           vEl.className = "verdict ok";
-          vEl.textContent = "정상 — 잠정 대비 " + ar.toFixed(2) + "% (허용 " + tol + "% 이내)";
-          tolTxt = " 잠정마감 대비 차이는 허용 오차 이내로 마감 정확도는 정상입니다.";
+          vEl.textContent = "정상 — " + cfg.close.cols[C.cur-2] + " 대비 " + ar.toFixed(2) + "% (허용 " + tol + "% 이내)";
+          tolTxt = " " + cfg.close.cols[C.cur-2] + " 대비 차이는 허용 오차 이내로 마감 정확도는 정상입니다.";
         } else {
           vEl.className = "verdict warn";
-          vEl.textContent = "확인 필요 — 잠정 대비 " + ar.toFixed(2) + "% (허용 " + tol + "% 초과)";
-          tolTxt = " 잠정마감 대비 차이가 허용 오차 " + tol + "%를 초과해 원인 확인이 필요합니다.";
+          vEl.textContent = "확인 필요 — " + cfg.close.cols[C.cur-2] + " 대비 " + ar.toFixed(2) + "% (허용 " + tol + "% 초과)";
+          tolTxt = " " + cfg.close.cols[C.cur-2] + " 대비 차이가 허용 오차 " + tol + "%를 초과해 원인 확인이 필요합니다.";
         }
       } else {
         vEl.className = "verdict";
-        vEl.textContent = "확정마감을 입력하면 판정이 표시됩니다.";
+        vEl.textContent = cValLabel + "을 입력하면 판정이 표시됩니다.";
       }
     }
 
@@ -653,7 +628,7 @@ window.onerror = function(msg, src, line, col){
   var FIELDS = [];
   var saveTimer = null;
   function stateKey(){
-    return "perfnarr3:" + $("meeting").value + ":" + $("year").value + "-" + ("0" + $("month").value).slice(-2);
+    return "perfnarr4:" + $("meeting").value + ":" + $("year").value + "-" + ("0" + $("month").value).slice(-2);
   }
   function collect(){
     var o = {unit:$("unit").value, inunit:$("inunit").value, detail:$("detail").value, fields:{},
@@ -690,7 +665,7 @@ window.onerror = function(msg, src, line, col){
     return count;
   }
   function seed(){
-    var cfg = MEET[$("meeting").value];
+    var cfg = cfgNow();
     var y = Number($("year").value), m = Number($("month").value);
     var cM = shift(y, m, cfg.close.off), fM = shift(y, m, cfg.fcst.off);
     var n = fillSection("c", cfg.close.cols, SEED[ym(cM.y, cM.m)]);
@@ -698,10 +673,11 @@ window.onerror = function(msg, src, line, col){
     return n;
   }
   function periodsNeeded(){
-    var cfg = MEET[$("meeting").value];
+    var cfg = cfgNow();
     var y = Number($("year").value), m = Number($("month").value);
     var cM = shift(y, m, cfg.close.off), fM = shift(y, m, cfg.fcst.off);
-    return [ym(cM.y, cM.m), ym(fM.y, fM.m)];
+    var a = ym(cM.y, cM.m), b = ym(fM.y, fM.m);
+    return a === b ? [a] : [a, b];
   }
   function fetchSeed(done){
     var ps = periodsNeeded();
@@ -726,12 +702,12 @@ window.onerror = function(msg, src, line, col){
         done();
       });
   }
-  function clearAll(){
-    FIELDS.forEach(function(id){ if (id !== "tol" && $(id)) $(id).value = ""; });
-    $("c_factors").innerHTML = ""; $("f_factors").innerHTML = "";
-  }
   function clearNumbers(){
     FIELDS.forEach(function(id){ if (id !== "tol" && $(id)) $(id).value = ""; });
+  }
+  function clearAll(){
+    clearNumbers();
+    $("c_factors").innerHTML = ""; $("f_factors").innerHTML = "";
   }
   var prevInF = 1;
   function ensureRows(){
@@ -768,13 +744,21 @@ window.onerror = function(msg, src, line, col){
     prevInF = f;
   }
 
-  (function initMonths(){
+  (function initSelects(){
+    var ms = $("meeting");
+    ORDER.forEach(function(k){
+      if (!MEET[k]) return;
+      var op = document.createElement("option");
+      op.value = k; op.textContent = MEET[k].label + " (" + MEET[k].when + ")";
+      if (k === (CFG.default_meeting || ORDER[0])) op.selected = true;
+      ms.appendChild(op);
+    });
     var sel = $("month");
     for (var i=1;i<=12;i++){
-      var op = document.createElement("option");
-      op.value = i; op.textContent = i + "월";
-      if (i === 9) op.selected = true;
-      sel.appendChild(op);
+      var op2 = document.createElement("option");
+      op2.value = i; op2.textContent = i + "월";
+      if (i === 9) op2.selected = true;
+      sel.appendChild(op2);
     }
   })();
 
