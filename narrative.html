@@ -31,9 +31,16 @@
   select:focus,input:focus{outline:3px solid rgba(31,95,168,.35);outline-offset:1px;border-color:var(--focus)}
 
   .cycle{background:var(--surface);border:1px solid var(--rule);border-radius:6px;
-    padding:16px 20px;margin-bottom:26px;font-size:16px;color:var(--muted)}
+    padding:16px 20px;margin-bottom:12px;font-size:16px;color:var(--muted)}
   .cycle b{color:var(--ink)}
   .cycle .now{color:var(--ink);font-weight:700}
+
+  .seedbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:26px;
+    font-size:15px;color:var(--muted)}
+  .seedbar button{background:var(--field);border:1px solid var(--rule);color:var(--ink);
+    border-radius:4px;padding:9px 14px;font-size:15px;font-family:inherit;cursor:pointer;min-height:42px}
+  .seedbar button:hover{border-color:var(--focus);color:var(--focus)}
+  .seedbar .warn{color:#8C2018;font-weight:700}
 
   section{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:24px;margin-bottom:26px}
   section > h2{font-size:22px;margin:0 0 4px;font-weight:700;letter-spacing:-0.01em}
@@ -51,10 +58,6 @@
   tr.total td.cur{background:#D8E5F0}
   td.delta{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap;font-size:16px}
   .up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--muted)}
-  .tag{display:inline-block;font-size:12px;font-weight:600;padding:2px 6px;border-radius:3px;
-    background:#E7EDF2;color:var(--muted);margin-left:6px;vertical-align:middle}
-  .tag.manual{background:#FBEEC9;color:#7A5A10}
-  .tag.auto{background:#DCEBDD;color:#2C5E33}
 
   .prog{font-size:16px;color:var(--muted);padding:11px 14px;background:#F5F8FA;
     border:1px solid var(--rule);border-radius:4px;margin-bottom:20px;font-variant-numeric:tabular-nums}
@@ -157,6 +160,10 @@
 </header>
 
 <div class="cycle" id="cycle"></div>
+<div class="seedbar">
+  <span id="seedmsg">성과리포트 값을 불러오는 중입니다.</span>
+  <button type="button" id="reseed">서버값으로 다시 채우기</button>
+</div>
 
 <section>
   <h2 id="h-close">마감</h2>
@@ -232,9 +239,9 @@
 
   <p class="note">
     <b>회의 주기</b>는 25일 가마감 → 익월 5일 1차 실적회의 → 익월 15일 2차 실적회의로 돌아갑니다.<br>
+    <b>값은 성과리포트에서 그대로 가져옵니다.</b> 국내·해외 구분 없이 리포트에 있는 1차·2차·3차 예상과 잠정마감이 지역·사업분야별로 채워집니다. 비어 있는 칸은 리포트에도 아직 값이 없는 항목이니 직접 넣으시면 됩니다.<br>
+    <b>직접 고친 값은 덮어쓰지 않습니다.</b> 서버 값으로 되돌리려면 위의 다시 채우기 단추를 누르십시오.<br>
     <b>입력은 국내·해외 × 덴탈·메디컬·에스테틱 6줄</b>이고 소계와 합계는 자동 계산됩니다. 문안 상세도를 바꾸면 문장에 사업분야를 넣을지 국내·해외까지만 쓸지 정할 수 있습니다.<br>
-    <b>국내 숫자는 SalesOps에서 사업분야별로 자동으로 들어옵니다.</b> 1차·2차 예상과 잠정마감이 대상이며, 비어 있는 칸에만 채워지므로 직접 고친 값은 덮어쓰지 않습니다.<br>
-    <b>해외 전 항목</b>과 <b>가마감·확정마감·3차 예상</b>은 아직 자동 취득 경로가 없어 수기 입력입니다.<br>
     입력값은 회의·연·월별로 이 브라우저에만 저장됩니다.
   </p>
 </div>
@@ -247,7 +254,7 @@ window.onerror = function(msg, src, line, col){
   if (e){ e.style.display = "block"; e.textContent = "화면 오류: " + msg + " (" + line + ":" + col + ")"; }
 };
 (function(){
-  var SEED = __SEED_JSON__;
+  var SEED = {};
 
   var BIZ = ["덴탈","메디컬","에스테틱"];
   var SCOPES = [["dom","국내"],["ovs","해외"]];
@@ -271,6 +278,13 @@ window.onerror = function(msg, src, line, col){
       fcst: {off:0,  cols:["1차 예상","2차 예상","3차 예상"], cur:3},
       tol:true
     }
+  };
+
+  var FIELD_OF = {
+    "1차 예상":"first",
+    "2차 예상":"second",
+    "3차 예상":"third_forecast",
+    "마감(잠정)":"close"
   };
 
   var REASONS = {
@@ -328,16 +342,15 @@ window.onerror = function(msg, src, line, col){
     var t = m - 1 + off, ny = y + Math.floor(t/12), nm = ((t%12)+12)%12 + 1;
     return {y:ny, m:nm};
   }
+  function ym(y,m){ return y + "-" + (m<10 ? "0" : "") + m; }
   function addv(a, b){ return (a===null && b===null) ? null : (a||0) + (b||0); }
 
-  // ---- 표 뼈대 생성 ----
   function buildBody(pfx){
     var h = "";
     for (var s=0;s<SCOPES.length;s++){
       var sk = SCOPES[s][0], sl = SCOPES[s][1];
       for (var b=0;b<BIZ.length;b++){
-        h += "<tr><td>" + sl + " " + BIZ[b] +
-             (sk==="dom" ? " <span class='tag auto'>자동</span>" : " <span class='tag manual'>수기</span>") + "</td>";
+        h += "<tr><td>" + sl + " " + BIZ[b] + "</td>";
         for (var j=1;j<=3;j++){
           h += "<td class='c" + j + "'><input class='num' inputmode='numeric' placeholder='0' id='" +
                pfx + "_" + sk + "_" + b + "_" + j + "'></td>";
@@ -354,7 +367,6 @@ window.onerror = function(msg, src, line, col){
     $(pfx + "_body").innerHTML = h;
   }
 
-  // ---- 변동 요인 ----
   function factorRow(target, data){
     data = data || {};
     var row = document.createElement("div");
@@ -412,7 +424,6 @@ window.onerror = function(msg, src, line, col){
     return list.slice(0,-1).join(", ") + ", " + list[list.length-1];
   }
 
-  // ---- 섹션 계산 ----
   function doSection(pfx, spec, thPrefix, progId){
     var n = spec.cols.length, cur = spec.cur;
 
@@ -656,36 +667,71 @@ window.onerror = function(msg, src, line, col){
       try { localStorage.setItem(stateKey(), JSON.stringify(collect())); } catch(e){}
     }, 300);
   }
-  function ym(y,m){ return y + "-" + (m<10 ? "0" : "") + m; }
+
   function fillSection(pfx, cols, d){
-    if (!d) return;
-    var f = inF();
+    if (!d) return 0;
+    var f = inF(), count = 0;
     for (var i=0;i<cols.length;i++){
-      var lab = cols[i], key = null;
-      if (lab.indexOf("1차 예상") === 0) key = "first";
-      else if (lab.indexOf("2차 예상") === 0) key = "second";
-      else if (lab.indexOf("마감(잠정)") === 0) key = "close";
+      var key = FIELD_OF[cols[i]];
       if (!key) continue;
-      for (var b=0;b<BIZ.length;b++){
-        var rec = d[BIZ[b]];
-        if (!rec) continue;
-        var v = rec[key];
-        if (v === null || v === undefined) continue;
-        var el = $(pfx + "_dom_" + b + "_" + (i+1));
-        if (el && !el.value) el.value = commaLoose(v / f);
+      for (var s=0;s<SCOPES.length;s++){
+        var byBiz = d[SCOPES[s][1]];
+        if (!byBiz) continue;
+        for (var b=0;b<BIZ.length;b++){
+          var rec = byBiz[BIZ[b]];
+          if (!rec) continue;
+          var v = rec[key];
+          if (v === null || v === undefined) continue;
+          var el = $(pfx + "_" + SCOPES[s][0] + "_" + b + "_" + (i+1));
+          if (el && !el.value){ el.value = commaLoose(v / f); count++; }
+        }
       }
     }
+    return count;
   }
   function seed(){
     var cfg = MEET[$("meeting").value];
     var y = Number($("year").value), m = Number($("month").value);
     var cM = shift(y, m, cfg.close.off), fM = shift(y, m, cfg.fcst.off);
-    fillSection("c", cfg.close.cols, SEED[ym(cM.y, cM.m)]);
-    fillSection("f", cfg.fcst.cols, SEED[ym(fM.y, fM.m)]);
+    var n = fillSection("c", cfg.close.cols, SEED[ym(cM.y, cM.m)]);
+    n += fillSection("f", cfg.fcst.cols, SEED[ym(fM.y, fM.m)]);
+    return n;
+  }
+  function periodsNeeded(){
+    var cfg = MEET[$("meeting").value];
+    var y = Number($("year").value), m = Number($("month").value);
+    var cM = shift(y, m, cfg.close.off), fM = shift(y, m, cfg.fcst.off);
+    return [ym(cM.y, cM.m), ym(fM.y, fM.m)];
+  }
+  function fetchSeed(done){
+    var ps = periodsNeeded();
+    $("seedmsg").className = "";
+    $("seedmsg").textContent = "성과리포트 값을 불러오는 중입니다 (" + ps.join(", ") + ")";
+    fetch("/narrative-data?periods=" + encodeURIComponent(ps.join(",")), {credentials:"same-origin"})
+      .then(function(r){
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function(j){
+        SEED = j.data || {};
+        var n = done();
+        $("seedmsg").className = "";
+        $("seedmsg").textContent = n > 0
+          ? ps.join(", ") + " 값 " + n + "칸을 성과리포트에서 채웠습니다."
+          : ps.join(", ") + " 는 리포트에 채울 값이 없거나 이미 입력돼 있습니다.";
+      })
+      .catch(function(e){
+        $("seedmsg").className = "warn";
+        $("seedmsg").textContent = "성과리포트 값을 불러오지 못했습니다 (" + e.message + "). 직접 입력하시면 됩니다.";
+        done();
+      });
   }
   function clearAll(){
     FIELDS.forEach(function(id){ if (id !== "tol" && $(id)) $(id).value = ""; });
     $("c_factors").innerHTML = ""; $("f_factors").innerHTML = "";
+  }
+  function clearNumbers(){
+    FIELDS.forEach(function(id){ if (id !== "tol" && $(id)) $(id).value = ""; });
   }
   var prevInF = 1;
   function ensureRows(){
@@ -706,7 +752,9 @@ window.onerror = function(msg, src, line, col){
       (o.ff||[]).forEach(function(f){ factorRow("f_factors", f); });
     }
     prevInF = inF();
-    seed(); ensureRows(); render();
+    ensureRows();
+    render();
+    fetchSeed(function(){ var n = seed(); render(); return n; });
   }
   function convertInputs(){
     var f = inF();
@@ -734,6 +782,10 @@ window.onerror = function(msg, src, line, col){
   buildBody("f");
   FIELDS = allFields();
 
+  $("reseed").addEventListener("click", function(){
+    clearNumbers();
+    fetchSeed(function(){ var n = seed(); render(); return n; });
+  });
   document.querySelectorAll("button.copy[data-src]").forEach(function(b){
     b.addEventListener("click", function(){
       var el = $(b.getAttribute("data-src"));
