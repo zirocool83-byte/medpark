@@ -130,7 +130,7 @@ def narrative_page():
     html = html.replace("__CONFIG_JSON__", json.dumps(_config(), ensure_ascii=False))
     resp = make_response(html)
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
-    resp.headers["X-MedPark-Narrative"] = "narrative-6.0"
+    resp.headers["X-MedPark-Narrative"] = "narrative-6.1"
     return resp
 
 
@@ -139,14 +139,13 @@ def narrative_users():
     user = _current_user()
     if not user:
         return jsonify({"error": "unauthorized"}), 401
-    scope = _my_scope(user)
     return jsonify({
         "me": {
             "user_id": user.get("user_id"),
             "display_name": user.get("display_name"),
             "permission_type": user.get("permission_type"),
         },
-        "scope": scope,
+        "scope": _my_scope(user),
         "users": _active_users(),
     })
 
@@ -208,11 +207,50 @@ def narrative_round_save():
     return jsonify({"ok": True, "key": key, "record": record})
 
 
+@app.get("/narrative-round-delete")
+def narrative_round_delete():
+    """회차 기록 한 건을 지운다.
+
+    confirm=yes 를 붙여야 실제로 지운다. 붙이지 않으면 지울 내용만 보여준다.
+    실적 원장과는 무관한 별도 파일만 건드린다.
+    """
+    user = _current_user()
+    if not user:
+        return jsonify({"error": "unauthorized"}), 401
+    if _my_scope(user).get("readonly"):
+        return jsonify({"error": "readonly"}), 403
+    key = (request.args.get("key") or "").strip()
+    if not KEY_RE.match(key):
+        return jsonify({"error": "bad_key", "keys": STORE.list_keys()}), 400
+
+    payload = STORE._read()
+    rounds = payload.get("rounds") or {}
+    record = rounds.get(key)
+    if record is None:
+        return jsonify({"deleted": False, "reason": "not_found", "key": key, "keys": sorted(rounds.keys())}), 404
+    if request.args.get("confirm") != "yes":
+        return jsonify({
+            "deleted": False,
+            "reason": "confirm_required",
+            "key": key,
+            "updated_at": record.get("updated_at"),
+            "updated_by": (record.get("updated_by") or {}).get("display_name"),
+            "revisions": len(record.get("history") or []),
+            "hint": "같은 주소 끝에 &confirm=yes 를 붙이면 지웁니다.",
+        }), 409
+    rounds.pop(key, None)
+    try:
+        STORE._write(payload)
+    except Exception as exc:
+        return jsonify({"error": type(exc).__name__ + ": " + str(exc)[:200]}), 500
+    return jsonify({"deleted": True, "key": key, "remaining": sorted(rounds.keys())})
+
+
 @app.get("/narrative-rounds")
 def narrative_rounds():
     if not _current_user():
         return jsonify({"error": "unauthorized"}), 401
-    return jsonify({"rounds": STORE.summaries()})
+    return jsonify({"rounds": STORE.summaries(), "keys": STORE.list_keys()})
 
 
 @app.get("/narrative-fields")
@@ -247,13 +285,6 @@ def narrative_fields():
 @app.get("/narrative-health")
 def narrative_health():
     cfg = _config()
-    sample = _period_rows(2026, 8)
-    filled = {}
-    for businesses in sample.values():
-        for values in businesses.values():
-            for field, value in values.items():
-                if value is not None:
-                    filled[field] = filled.get(field, 0) + 1
     user = _current_user()
     return jsonify({
         "template_exists": TEMPLATE.exists(),
@@ -264,8 +295,6 @@ def narrative_health():
         "store_exists": STORE.path.exists(),
         "round_keys": STORE.list_keys(),
         "my_scope": _my_scope(user) if user else None,
-        "sample_period": "2026-08",
-        "filled_counts": filled,
     })
 
 
