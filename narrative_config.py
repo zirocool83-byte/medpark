@@ -10,12 +10,8 @@ meetings[키]
                  cur  = 이번 회의가 보고하는 열 번호(1부터). 비교 기준은 그 왼쪽 열
                  word = 문장에서 쓸 표현
   tol          : 잠정 → 확정 허용오차 판정을 쓸지
-  lists        : 회의별 추가 입력표. 아래 col type 참고
-                   user   = 등록 사용자 드롭다운
-                   select = options 중 선택
-                   text   = 자유 입력
-                   amount = 금액(입력 단위 적용)
-                   date   = 날짜
+  lists        : 회의별 추가 입력표
+                   user / select / text / amount / date
                  sentence = 문장 조립 틀. {키}가 입력값으로 치환된다
 """
 
@@ -28,6 +24,11 @@ CONFIG = {
     "businesses": ["덴탈", "메디컬", "에스테틱"],
     "regions": ["국내", "해외"],
 
+    # 이 화면에서 직접 입력할 수 있는 지역.
+    # 국내는 SalesOps가 유일한 입력 창구이고 10일경 확정마감으로 잠기므로 여기서는 잠근다.
+    # 국내 숫자는 성과리포트를 통해 자동으로만 들어온다.
+    "editable_regions": ["해외"],
+
     # 마감 관련 경고를 띄울 기간. 그 외에는 감춘다.
     "close_season": {
         "preclose": {"from_day": 23, "to_day": 31, "target": "당월 가마감"},
@@ -35,6 +36,7 @@ CONFIG = {
     },
 
     # permission_type → 편집 가능 범위. 여기 없으면 조회만 가능하다.
+    # editable_regions와 교집합만 실제로 열린다.
     "scopes": {
         "admin": SCOPE_ALL,
         "domestic_all": {"regions": ["국내"], "businesses": ["덴탈", "메디컬", "에스테틱"]},
@@ -133,13 +135,16 @@ CONFIG = {
         },
     },
 
-    # 열 이름 → 리포트 필드. 없는 열(사업계획, 마감(확정))은 수기 입력.
+    # 열 이름 → 리포트 필드.
+    # provisional = 그 달의 마감값을 처음 본 시점에 보존해 둔 잠정마감
+    # close       = 현재 마감값. 10일경 SalesOps에서 확정으로 잠기면 이 값이 확정마감이 된다
     "field_of": {
         "1차 예상": "first",
         "2차 예상": "second",
         "3차 예상": "third_forecast",
         "3차 확정": "third_confirmed",
         "가마감": "preclose",
-        "마감(잠정)": "close",
+        "마감(잠정)": "provisional",
+        "마감(확정)": "close",
     },
 }
