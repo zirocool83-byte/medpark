@@ -1,14 +1,13 @@
-"""회의 문안 생성기 페이지.
+"""회의 문안 생성기 페이지와 API.
 
-성과리포트 안에 /narrative 화면을 추가한다.
-값은 성과리포트가 이미 들고 있는 데이터에서 그대로 가져온다.
+값은 성과리포트가 이미 들고 있는 데이터에서 가져오고,
+회의별 입력(변동 요인·계획·백업플랜)과 완성 문안은 회차별로 서버에 남긴다.
 
-핵심: 리포트는 "그 달의 가마감·마감"을 다음 달 행의 prev_* 필드로 들고 있다.
-      (8월 가마감은 9월 리포트의 prev_preclose)
-      그래서 한 달치를 만들 때 당월 리포트와 익월 리포트를 함께 읽어
-      그 달의 완전한 값으로 정규화한다.
+리포트는 "그 달의 가마감·마감"을 다음 달 행의 prev_* 필드로 들고 있다.
+(8월 가마감 = 9월 리포트의 prev_preclose)
+그래서 한 달치를 만들 때 당월과 익월 리포트를 함께 읽어 정규화한다.
 
-회의 구성과 열 이름은 narrative_config.py에서만 고친다.
+회의 구성·입력 항목·권한 범위는 narrative_config.py에서만 고친다.
 """
 
 import json
@@ -17,6 +16,7 @@ from pathlib import Path
 
 import browser_bridge as prev
 import root_live_fetch as live
+import narrative_store as store_mod
 from flask import jsonify, make_response, redirect, request
 
 app = prev.app
@@ -26,45 +26,13 @@ TEMPLATE = Path(__file__).with_name("narrative.html")
 LINK_ID = "mp-narrative-link"
 REPORT_PATHS = ("/", "/performance-report")
 PERIOD_RE = re.compile(r"^(\d{4})-(\d{2})$")
+KEY_RE = re.compile(r"^(\d{4})-(\d{2}):([a-z0-9_]{1,16})$")
 MAX_PERIODS = 4
 
-# 당월 리포트에서 그대로 쓰는 필드
 OWN_FIELDS = ("first", "second", "third_confirmed", "third_forecast", "close", "carryover")
-# 익월 리포트의 prev_* → 이 달의 확정된 값. 가마감은 이 경로로만 얻는다.
 PREV_MAP = {"prev_first": "first", "prev_preclose": "preclose", "prev_close": "close"}
 
-FALLBACK_CONFIG = {
-    "order": ["pre", "r1", "r2"],
-    "default_meeting": "r1",
-    "meetings": {
-        "pre": {
-            "label": "가마감 회의", "when": "25일경",
-            "close": {"off": 0, "cols": ["3차 예상", "가마감"], "cur": 2, "word": "가마감"},
-            "fcst": {"off": 1, "cols": ["사업계획", "1차 예상"], "cur": 2},
-            "tol": False,
-        },
-        "r1": {
-            "label": "1차 실적회의", "when": "5일경",
-            "close": {"off": -1, "cols": ["가마감", "마감(잠정)"], "cur": 2, "word": "잠정마감"},
-            "fcst": {"off": 0, "cols": ["1차 예상", "2차 예상"], "cur": 2},
-            "tol": False,
-        },
-        "r2": {
-            "label": "2차 실적회의", "when": "15일경",
-            "close": {"off": -1, "cols": ["마감(잠정)", "마감(확정)"], "cur": 2, "word": "확정마감"},
-            "fcst": {"off": 0, "cols": ["1차 예상", "2차 예상", "3차 예상"], "cur": 3},
-            "tol": True,
-        },
-    },
-    "field_of": {
-        "1차 예상": "first",
-        "2차 예상": "second",
-        "3차 예상": "third_forecast",
-        "3차 확정": "third_confirmed",
-        "가마감": "preclose",
-        "마감(잠정)": "close",
-    },
-}
+STORE = store_mod.RoundStore(base.DATA_DIR)
 
 
 def _config():
@@ -75,7 +43,7 @@ def _config():
             return cfg
     except Exception:
         pass
-    return FALLBACK_CONFIG
+    return {}
 
 
 def _to_int(value):
@@ -88,10 +56,6 @@ def _to_int(value):
 
 
 def _merge(out, report, mapping):
-    """report의 detail 행을 지역·사업분야로 합산해 out에 넣는다.
-
-    mapping: {리포트 필드명: 저장할 이름}. 나중에 부른 쪽이 앞의 값을 덮는다.
-    """
     if not report:
         return
     collected = {}
@@ -108,8 +72,7 @@ def _merge(out, report, mapping):
                 continue
             bucket[dst] = value if bucket.get(dst) is None else bucket[dst] + value
     for (region, business), values in collected.items():
-        target = out.setdefault(region, {}).setdefault(business, {})
-        target.update(values)
+        out.setdefault(region, {}).setdefault(business, {}).update(values)
 
 
 def _build(year, month):
@@ -120,24 +83,45 @@ def _build(year, month):
 
 
 def _period_rows(year, month):
-    """해당 월을 자기완결적인 한 달치로 만든다."""
     out = {}
     _merge(out, _build(year, month), {f: f for f in OWN_FIELDS})
-    next_year, next_month = (year + 1, 1) if month == 12 else (year, month + 1)
-    _merge(out, _build(next_year, next_month), PREV_MAP)
+    ny, nm = (year + 1, 1) if month == 12 else (year, month + 1)
+    _merge(out, _build(ny, nm), PREV_MAP)
     return out
 
 
-def _require_user():
+def _current_user():
     try:
         return base.current_user()
     except Exception:
         return None
 
 
+def _my_scope(user):
+    return store_mod.scope_of(user, _config().get("scopes") or {})
+
+
+def _active_users():
+    try:
+        users = base.read_store().get("users") or []
+    except Exception:
+        return []
+    out = []
+    for u in users:
+        if not isinstance(u, dict) or not u.get("active", True):
+            continue
+        out.append({
+            "user_id": u.get("user_id"),
+            "display_name": u.get("display_name"),
+            "permission_type": u.get("permission_type"),
+        })
+    out.sort(key=lambda x: str(x.get("display_name") or ""))
+    return out
+
+
 @app.get("/narrative")
 def narrative_page():
-    if not _require_user():
+    if not _current_user():
         return redirect("/")
     try:
         html = TEMPLATE.read_text(encoding="utf-8")
@@ -146,13 +130,30 @@ def narrative_page():
     html = html.replace("__CONFIG_JSON__", json.dumps(_config(), ensure_ascii=False))
     resp = make_response(html)
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
-    resp.headers["X-MedPark-Narrative"] = "narrative-5.0"
+    resp.headers["X-MedPark-Narrative"] = "narrative-6.0"
     return resp
+
+
+@app.get("/narrative-users")
+def narrative_users():
+    user = _current_user()
+    if not user:
+        return jsonify({"error": "unauthorized"}), 401
+    scope = _my_scope(user)
+    return jsonify({
+        "me": {
+            "user_id": user.get("user_id"),
+            "display_name": user.get("display_name"),
+            "permission_type": user.get("permission_type"),
+        },
+        "scope": scope,
+        "users": _active_users(),
+    })
 
 
 @app.get("/narrative-data")
 def narrative_data():
-    if not _require_user():
+    if not _current_user():
         return jsonify({"error": "unauthorized"}), 401
     requested = (request.args.get("periods") or "").split(",")
     data, bad = {}, []
@@ -171,10 +172,52 @@ def narrative_data():
     return jsonify({"data": data, "invalid": bad})
 
 
+@app.get("/narrative-round")
+def narrative_round_get():
+    user = _current_user()
+    if not user:
+        return jsonify({"error": "unauthorized"}), 401
+    key = (request.args.get("key") or "").strip()
+    if not KEY_RE.match(key):
+        return jsonify({"error": "bad_key"}), 400
+    return jsonify({"key": key, "record": STORE.get(key), "scope": _my_scope(user)})
+
+
+@app.post("/narrative-round")
+def narrative_round_save():
+    user = _current_user()
+    if not user:
+        return jsonify({"error": "unauthorized"}), 401
+    scope = _my_scope(user)
+    if scope.get("readonly"):
+        return jsonify({"error": "readonly", "scope": scope}), 403
+    payload = request.get_json(silent=True) or {}
+    key = (payload.get("key") or "").strip()
+    if not KEY_RE.match(key):
+        return jsonify({"error": "bad_key"}), 400
+    patch = {}
+    for field in ("numbers", "factors", "lists", "narratives", "meta"):
+        if field in payload:
+            patch[field] = payload[field]
+    if not patch:
+        return jsonify({"error": "empty_patch"}), 400
+    try:
+        record = STORE.save(key, patch, user, note=str(payload.get("note") or "")[:200])
+    except Exception as exc:
+        return jsonify({"error": type(exc).__name__ + ": " + str(exc)[:200]}), 500
+    return jsonify({"ok": True, "key": key, "record": record})
+
+
+@app.get("/narrative-rounds")
+def narrative_rounds():
+    if not _current_user():
+        return jsonify({"error": "unauthorized"}), 401
+    return jsonify({"rounds": STORE.summaries()})
+
+
 @app.get("/narrative-fields")
 def narrative_fields():
-    """리포트 행이 실제로 들고 있는 필드를 확인한다."""
-    if not _require_user():
+    if not _current_user():
         return jsonify({"error": "unauthorized"}), 401
     try:
         year = int(request.args.get("year", 2026))
@@ -196,7 +239,6 @@ def narrative_fields():
                 numeric[key] = value
     return jsonify({
         "period": "%04d-%02d" % (year, month),
-        "row_identity": {k: detail.get(k) for k in ("business", "region", "kind")} if detail else None,
         "all_keys": sorted(detail.keys()) if detail else [],
         "numeric_fields": numeric,
     })
@@ -204,29 +246,31 @@ def narrative_fields():
 
 @app.get("/narrative-health")
 def narrative_health():
-    sample = _period_rows(2026, 8)
     cfg = _config()
+    sample = _period_rows(2026, 8)
     filled = {}
-    for region, businesses in sample.items():
-        for business, values in businesses.items():
+    for businesses in sample.values():
+        for values in businesses.values():
             for field, value in values.items():
                 if value is not None:
                     filled[field] = filled.get(field, 0) + 1
+    user = _current_user()
     return jsonify({
         "template_exists": TEMPLATE.exists(),
         "template_bytes": TEMPLATE.stat().st_size if TEMPLATE.exists() else 0,
-        "config_source": "narrative_config.py" if cfg is not FALLBACK_CONFIG else "fallback",
+        "config_loaded": bool(cfg.get("meetings")),
         "meetings": cfg.get("order"),
-        "field_of": cfg.get("field_of"),
+        "store_path": str(STORE.path),
+        "store_exists": STORE.path.exists(),
+        "round_keys": STORE.list_keys(),
+        "my_scope": _my_scope(user) if user else None,
         "sample_period": "2026-08",
         "filled_counts": filled,
-        "sample": sample,
     })
 
 
 @app.after_request
 def narrative_link(resp):
-    """성과리포트 화면 우상단에 문안 생성기 링크를 붙인다."""
     try:
         if request.path not in REPORT_PATHS:
             return resp
