@@ -1,29 +1,17 @@
-"""회차 문안을 회사 장표 3장으로 만든다.
+"""회차 문안과 표를 회사 장표 3장으로 만든다.
 
 narrative_template.pptx 는 실제 결산회의 장표에서 실적 슬라이드 3장과
 마스터·레이아웃·테마만 남기고 엑셀 캡처를 제거한 것이다.
-여기서는 각 장의 본문 텍스트 상자 안 문단만 새로 갈아끼운다.
+본문 텍스트 상자의 문단을 갈아끼우고, 비워둔 표 자리에 네이티브 표를 넣는다.
 배경·머리·폰트·색·슬라이드 번호는 원본 그대로 남는다.
-
-표는 원본에서도 엑셀 캡처 이미지였으므로 자리를 비워 둔다.
-받은 파일에 엑셀 캡처를 붙이면 회의 자료가 완성된다.
 
 주의 1: txBody 는 <a:bodyPr>...</a:bodyPr><a:lstStyle/> 다음에 문단이 온다.
         bodyPr 이 자식(<a:spAutoFit/>)을 가질 수 있어서 여는 태그만 잘라내면
         XML 이 깨지고, 파워포인트는 오류 없이 그 상자를 통째로 무시한다.
         (내용은 파일 안에 있는데 화면에는 아무것도 안 보이는 상태가 된다.)
-        그래서 bodyPr 과 lstStyle 을 통째로 살린 뒤 문단만 교체하고,
-        내보내기 전에 XML 이 실제로 파싱되는지 확인한다.
 
 주의 2: 이 서버에는 Flask 와 gunicorn 만 설치돼 있다.
-        외부 라이브러리를 쓰면 모듈 로드가 통째로 실패해 화면에서 기능이 사라진다.
-        검사만 하고 다시 직렬화하지 않으므로 표준 라이브러리로 충분하다.
-
-문단 서식 규칙(원본에서 읽은 것)
-  검정 굵게  제목            1) 매출
-  검정       부제목·하위항목  (1) …  /  - 기존 : …
-  파랑 굵게  핵심 수치        ㄱ. 8월 잠정마감 …
-  빨강 굵게  경고·특이사항    * …
+        외부 라이브러리를 쓰면 모듈 로드가 통째로 실패해 기능이 화면에서 사라진다.
 """
 
 import io
@@ -76,7 +64,6 @@ def blank():
 
 
 def _replace_txbody(slide_xml, shape_name, paragraphs):
-    """지정한 도형의 문단만 교체한다. 위치·크기·bodyPr·lstStyle 은 그대로 둔다."""
     pattern = re.compile(
         r'(<p:sp>(?:(?!</p:sp>).)*?name="' + re.escape(shape_name) + r'"(?:(?!</p:sp>).)*?</p:sp>)',
         re.S,
@@ -105,33 +92,45 @@ def _replace_txbody(slide_xml, shape_name, paragraphs):
     return slide_xml[:match.start(1)] + new_sp + slide_xml[match.end(1):], True
 
 
-def build(blocks):
-    """blocks = {"close": [문단...], "fcst": [...], "plan_left": [...], "plan_right": [...]}"""
+def _insert_frame(slide_xml, frame_xml):
+    idx = slide_xml.rindex("</p:spTree>")
+    return slide_xml[:idx] + frame_xml + slide_xml[idx:]
+
+
+def build(blocks, frames=None):
+    """blocks: {"close":[문단],"fcst":[...],"plan_left":[...],"plan_right":[...]}
+       frames: {"close":표XML, "fcst":표XML, "plan":표XML}
+    """
     if not TEMPLATE.exists():
         raise FileNotFoundError("narrative_template.pptx 가 없습니다")
 
+    frames = frames or {}
     src = zipfile.ZipFile(TEMPLATE)
     out_buf = io.BytesIO()
-    report = {"replaced": [], "missing": [], "checked": []}
+    report = {"replaced": [], "missing": [], "tables": [], "checked": []}
 
     targets = {
-        SLIDE_CLOSE: [("TextBox 2", blocks.get("close") or [])],
-        SLIDE_FCST: [("TextBox 2", blocks.get("fcst") or [])],
-        SLIDE_PLAN: [("TextBox 2", blocks.get("plan_left") or []),
-                     ("직사각형 5", blocks.get("plan_right") or [])],
+        SLIDE_CLOSE: ([("TextBox 2", blocks.get("close") or [])], frames.get("close")),
+        SLIDE_FCST: ([("TextBox 2", blocks.get("fcst") or [])], frames.get("fcst")),
+        SLIDE_PLAN: ([("TextBox 2", blocks.get("plan_left") or []),
+                      ("직사각형 5", blocks.get("plan_right") or [])], frames.get("plan")),
     }
 
     with zipfile.ZipFile(out_buf, "w", zipfile.ZIP_DEFLATED) as out:
         for item in src.infolist():
             data = src.read(item.filename)
             if item.filename in targets:
+                shapes, frame = targets[item.filename]
                 xml = data.decode("utf-8")
-                for shape_name, paras in targets[item.filename]:
+                for shape_name, paras in shapes:
                     if not paras:
                         continue
                     xml, ok = _replace_txbody(xml, shape_name, paras)
                     tag = item.filename.split("/")[-1] + ":" + shape_name
                     (report["replaced"] if ok else report["missing"]).append(tag)
+                if frame:
+                    xml = _insert_frame(xml, frame)
+                    report["tables"].append(item.filename.split("/")[-1])
                 # 깨진 XML 은 조용히 무시되므로 반드시 여기서 걸러낸다.
                 ElementTree.fromstring(xml)
                 report["checked"].append(item.filename.split("/")[-1])
