@@ -4,8 +4,11 @@
 값은 성과리포트가 이미 들고 있는 데이터에서 그대로 가져온다.
 국내는 SalesOps 연동값, 해외는 저장된 마감·FCST 값이 대상이며
 지역·사업분야별로 나눠 채운다.
+
+회의 구성과 열 이름은 narrative_config.py에서만 고친다.
 """
 
+import json
 import re
 from pathlib import Path
 
@@ -22,6 +25,49 @@ REPORT_PATHS = ("/", "/performance-report")
 PERIOD_RE = re.compile(r"^(\d{4})-(\d{2})$")
 SEED_FIELDS = ("first", "second", "third_forecast", "third_confirmed", "close", "prev_close")
 MAX_PERIODS = 6
+
+FALLBACK_CONFIG = {
+    "order": ["pre", "r1", "r2"],
+    "default_meeting": "r1",
+    "meetings": {
+        "pre": {
+            "label": "가마감 회의", "when": "25일경",
+            "close": {"off": 0, "cols": ["3차 예상", "가마감"], "cur": 2, "word": "가마감"},
+            "fcst": {"off": 1, "cols": ["사업계획", "1차 예상"], "cur": 2},
+            "tol": False,
+        },
+        "r1": {
+            "label": "1차 실적회의", "when": "5일경",
+            "close": {"off": -1, "cols": ["가마감", "마감(잠정)"], "cur": 2, "word": "잠정마감"},
+            "fcst": {"off": 0, "cols": ["1차 예상", "2차 예상"], "cur": 2},
+            "tol": False,
+        },
+        "r2": {
+            "label": "2차 실적회의", "when": "15일경",
+            "close": {"off": -1, "cols": ["마감(잠정)", "마감(확정)"], "cur": 2, "word": "확정마감"},
+            "fcst": {"off": 0, "cols": ["1차 예상", "2차 예상", "3차 예상"], "cur": 3},
+            "tol": True,
+        },
+    },
+    "field_of": {
+        "1차 예상": "first",
+        "2차 예상": "second",
+        "3차 예상": "third_forecast",
+        "3차 확정": "third_confirmed",
+        "마감(잠정)": "close",
+    },
+}
+
+
+def _config():
+    try:
+        import narrative_config
+        cfg = getattr(narrative_config, "CONFIG", None)
+        if isinstance(cfg, dict) and cfg.get("meetings"):
+            return cfg
+    except Exception:
+        pass
+    return FALLBACK_CONFIG
 
 
 def _period_rows(year, month):
@@ -69,9 +115,10 @@ def narrative_page():
         html = TEMPLATE.read_text(encoding="utf-8")
     except Exception as exc:
         return make_response("문안 생성기 화면을 불러오지 못했습니다 (" + type(exc).__name__ + ")", 500)
+    html = html.replace("__CONFIG_JSON__", json.dumps(_config(), ensure_ascii=False))
     resp = make_response(html)
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
-    resp.headers["X-MedPark-Narrative"] = "narrative-3.0"
+    resp.headers["X-MedPark-Narrative"] = "narrative-4.0"
     return resp
 
 
@@ -102,9 +149,12 @@ def narrative_health():
     shape = {}
     for region, businesses in sample.items():
         shape[region] = sorted(businesses.keys())
+    cfg = _config()
     return jsonify({
         "template_exists": TEMPLATE.exists(),
         "template_bytes": TEMPLATE.stat().st_size if TEMPLATE.exists() else 0,
+        "config_source": "narrative_config.py" if cfg is not FALLBACK_CONFIG else "fallback",
+        "meetings": cfg.get("order"),
         "sample_period": "2026-08",
         "sample_shape": shape,
         "sample": sample,
