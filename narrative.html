@@ -14,37 +14,44 @@
   body{background:var(--bg);color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","맑은 고딕",sans-serif;
     font-size:18px;line-height:1.6;-webkit-text-size-adjust:100%}
-  .wrap{max-width:1100px;margin:0 auto;padding:28px 20px 80px}
+  .wrap{max-width:1140px;margin:0 auto;padding:26px 20px 90px}
 
   #err{display:none;margin-bottom:18px;padding:14px 16px;background:#FAE8E6;color:#8C2018;
     border:1px solid #E0A9A2;border-radius:6px;font-size:15px;white-space:pre-wrap}
 
-  header.top{display:flex;flex-wrap:wrap;gap:18px 28px;align-items:flex-end;
-    padding-bottom:20px;border-bottom:2px solid var(--ink);margin-bottom:14px}
-  header.top h1{font-size:30px;font-weight:800;margin:0;letter-spacing:-0.02em}
+  header.top{display:flex;flex-wrap:wrap;gap:16px 26px;align-items:flex-end;
+    padding-bottom:18px;border-bottom:2px solid var(--ink);margin-bottom:14px}
+  header.top h1{font-size:29px;font-weight:800;margin:0;letter-spacing:-0.02em}
   header.top p.sub{margin:6px 0 0;font-size:16px;color:var(--muted)}
-  .ctrls{display:flex;flex-wrap:wrap;gap:12px}
+  .ctrls{display:flex;flex-wrap:wrap;gap:11px}
   .ctrl{display:flex;flex-direction:column;gap:5px}
   .ctrl span{font-size:14px;color:var(--muted)}
-  select,input{font-family:inherit;font-size:18px;color:var(--ink);background:var(--field);
+  select,input,textarea{font-family:inherit;font-size:17px;color:var(--ink);background:var(--field);
     border:1px solid var(--rule);border-radius:4px;padding:9px 11px;min-height:44px}
-  select:focus,input:focus{outline:3px solid rgba(31,95,168,.35);outline-offset:1px;border-color:var(--focus)}
+  textarea{min-height:80px;line-height:1.6;width:100%}
+  select:focus,input:focus,textarea:focus{outline:3px solid rgba(31,95,168,.35);outline-offset:1px;border-color:var(--focus)}
+  input:disabled,select:disabled,textarea:disabled{background:#EDF0F2;color:#93A1AD;cursor:not-allowed}
 
   .cycle{background:var(--surface);border:1px solid var(--rule);border-radius:6px;
-    padding:16px 20px;margin-bottom:12px;font-size:16px;color:var(--muted)}
-  .cycle b{color:var(--ink)}
-  .cycle .now{color:var(--ink);font-weight:700}
+    padding:15px 19px;margin-bottom:10px;font-size:16px;color:var(--muted)}
+  .cycle b{color:var(--ink)} .cycle .now{color:var(--ink);font-weight:700}
+  .purpose{background:#F3F7FA;border:1px solid var(--rule);border-left:4px solid var(--focus);
+    border-radius:5px;padding:14px 18px;margin-bottom:12px;font-size:16px;color:#2C4356}
 
-  .seedbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:26px;
-    font-size:15px;color:var(--muted)}
-  .seedbar button{background:var(--field);border:1px solid var(--rule);color:var(--ink);
+  .bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:22px;font-size:15px;color:var(--muted)}
+  .bar button{background:var(--field);border:1px solid var(--rule);color:var(--ink);
     border-radius:4px;padding:9px 14px;font-size:15px;font-family:inherit;cursor:pointer;min-height:42px}
-  .seedbar button:hover{border-color:var(--focus);color:var(--focus)}
-  .seedbar .warn{color:#8C2018;font-weight:700}
+  .bar button:hover{border-color:var(--focus);color:var(--focus)}
+  .bar button.primary{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:700}
+  .bar button.primary:hover{background:#26343F;color:#fff}
+  .bar .warn{color:#8C2018;font-weight:700}
+  .bar .ok{color:#2C5E33;font-weight:700}
+  .pill{display:inline-block;padding:3px 9px;border-radius:11px;background:#E7EDF2;color:var(--muted);font-size:14px;font-weight:700}
+  .pill.ro{background:#FBEEC9;color:#7A5A10}
 
-  section{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:24px;margin-bottom:26px}
-  section > h2{font-size:22px;margin:0 0 4px;font-weight:700;letter-spacing:-0.01em}
-  section > p.hint{margin:0 0 20px;font-size:15px;color:var(--muted)}
+  section{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:22px;margin-bottom:24px}
+  section > h2{font-size:21px;margin:0 0 4px;font-weight:700;letter-spacing:-0.01em}
+  section > p.hint{margin:0 0 18px;font-size:15px;color:var(--muted)}
 
   table.grid{width:100%;border-collapse:collapse;margin-bottom:14px}
   table.grid th,table.grid td{padding:8px 7px;text-align:right;border-bottom:1px solid var(--rule);vertical-align:middle}
@@ -60,12 +67,11 @@
   .up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--muted)}
 
   .prog{font-size:16px;color:var(--muted);padding:11px 14px;background:#F5F8FA;
-    border:1px solid var(--rule);border-radius:4px;margin-bottom:20px;font-variant-numeric:tabular-nums}
-  .prog b{color:var(--ink)}
-  .prog.hide{display:none}
+    border:1px solid var(--rule);border-radius:4px;margin-bottom:18px;font-variant-numeric:tabular-nums}
+  .prog b{color:var(--ink)} .prog.hide{display:none}
 
-  .tolbox{display:none;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px;
-    padding:14px 16px;background:#F5F8FA;border:1px solid var(--rule);border-radius:5px}
+  .tolbox{display:none;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;
+    padding:13px 15px;background:#F5F8FA;border:1px solid var(--rule);border-radius:5px}
   .tolbox.on{display:flex}
   .tolbox label{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--muted)}
   .tolbox input{width:88px;text-align:right}
@@ -73,20 +79,25 @@
   .verdict.ok{background:#E2F0E5;color:#2C5E33}
   .verdict.warn{background:#FAE8E6;color:#8C2018}
 
-  .factors h3{font-size:17px;margin:0 0 10px;font-weight:700}
-  .frow{display:grid;grid-template-columns:92px 116px 1fr 152px 168px 44px;gap:7px;margin-bottom:8px;align-items:center}
-  .frow input,.frow select{min-height:44px;font-size:16px;padding:8px 9px}
-  .frow input.amt{text-align:right;font-variant-numeric:tabular-nums}
+  .lists h3,.factors h3{font-size:17px;margin:0 0 4px;font-weight:700}
+  .lists p.lhint,.factors p.lhint{margin:0 0 10px;font-size:15px;color:var(--muted)}
+  .lrow{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:8px;align-items:center}
+  .lrow > *{flex:1 1 130px;min-width:110px}
+  .lrow > .grow{flex:3 1 220px}
+  .lrow > .del{flex:0 0 46px;min-width:46px}
+  .lrow input,.lrow select{min-height:44px;font-size:16px;padding:8px 9px;width:100%}
+  .lrow input.amt{text-align:right;font-variant-numeric:tabular-nums}
   button.x{min-height:44px;border:1px solid var(--rule);background:var(--field);color:var(--muted);
-    border-radius:4px;font-size:19px;cursor:pointer;line-height:1}
+    border-radius:4px;font-size:19px;cursor:pointer;line-height:1;width:100%}
   button.x:hover{background:#ECEFF2;color:var(--ink)}
   button.add{margin-top:6px;border:1px dashed var(--rule);background:transparent;color:var(--muted);
     border-radius:4px;padding:11px 16px;font-size:16px;font-family:inherit;cursor:pointer;min-height:44px}
   button.add:hover{border-color:var(--focus);color:var(--focus)}
+  .req{color:#8C2018;font-weight:700;font-size:14px;margin-left:6px}
 
-  .out{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:28px 26px}
-  .out h2{font-size:22px;margin:0 0 20px;font-weight:700}
-  .block{border-left:3px solid var(--ink);padding:2px 0 2px 20px;margin-bottom:26px}
+  .out{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:26px 24px}
+  .out h2{font-size:21px;margin:0 0 18px;font-weight:700}
+  .block{border-left:3px solid var(--ink);padding:2px 0 2px 18px;margin-bottom:24px}
   .block .lbl{font-size:14px;color:var(--muted);margin-bottom:8px}
   .block .txt{font-family:"Nanum Myeongjo","AppleMyungjo","Batang","바탕",serif;
     font-size:21px;line-height:1.85;white-space:pre-wrap;word-break:keep-all;max-width:64ch}
@@ -95,14 +106,19 @@
     padding:11px 20px;font-size:16px;font-family:inherit;cursor:pointer;min-height:44px}
   button.copy:hover{background:#26343F}
   button.copy.done{background:#2C5E33}
-  .note{font-size:15px;color:var(--muted);margin-top:22px;padding-top:16px;border-top:1px solid var(--rule)}
+
+  .hist{margin-top:20px;font-size:15px;color:var(--muted)}
+  .hist summary{cursor:pointer;font-weight:700;color:var(--ink)}
+  .hist ul{margin:10px 0 0;padding-left:20px}
+  .hist li{margin-bottom:4px}
+  .note{font-size:15px;color:var(--muted);margin-top:20px;padding-top:15px;border-top:1px solid var(--rule)}
   .note b{color:var(--ink)}
 
   @media (max-width:860px){
     body{font-size:17px}
-    .wrap{padding:20px 12px 60px}
-    .frow{grid-template-columns:1fr 1fr;gap:7px}
-    .frow .del{grid-column:2;justify-self:end;width:60px}
+    .wrap{padding:18px 12px 60px}
+    .lrow > *{flex:1 1 46%}
+    .lrow > .grow{flex:1 1 100%}
     table.grid th,table.grid td{padding:6px 4px;font-size:14px}
     table.grid input{font-size:15px;padding:7px 5px}
     td.delta{font-size:14px}
@@ -120,45 +136,31 @@
   <div style="flex:1 1 240px">
     <h1>실적회의 문안 생성기</h1>
     <p class="sub"><a href="/" style="color:#1F5FA8;text-decoration:none">← 성과리포트로 돌아가기</a></p>
-    <p class="sub">국내·해외 × 덴탈·메디컬·에스테틱으로 나눠 입력하면 문장이 완성됩니다.</p>
+    <p class="sub" id="whoami">사용자 확인 중…</p>
   </div>
   <div class="ctrls">
-    <label class="ctrl"><span>회의</span>
-      <select id="meeting"></select>
-    </label>
-    <label class="ctrl"><span>회의 연도</span>
-      <select id="year"><option>2026</option><option>2027</option></select>
-    </label>
-    <label class="ctrl"><span>회의 월</span>
-      <select id="month"></select>
-    </label>
+    <label class="ctrl"><span>회의</span><select id="meeting"></select></label>
+    <label class="ctrl"><span>회의 연도</span><select id="year"><option>2026</option><option>2027</option></select></label>
+    <label class="ctrl"><span>회의 월</span><select id="month"></select></label>
     <label class="ctrl"><span>문안 상세도</span>
-      <select id="detail">
-        <option value="biz" selected>사업분야까지</option>
-        <option value="region">국내·해외까지</option>
-      </select>
+      <select id="detail"><option value="biz" selected>사업분야까지</option><option value="region">국내·해외까지</option></select>
     </label>
     <label class="ctrl"><span>입력 단위</span>
-      <select id="inunit">
-        <option value="1" selected>원</option>
-        <option value="1000">천원</option>
-        <option value="1000000">백만원</option>
-      </select>
+      <select id="inunit"><option value="1" selected>원</option><option value="1000">천원</option><option value="1000000">백만원</option></select>
     </label>
     <label class="ctrl"><span>표기 단위</span>
-      <select id="unit">
-        <option value="1e8">억원</option>
-        <option value="1e6" selected>백만원</option>
-        <option value="1">원</option>
-      </select>
+      <select id="unit"><option value="1e8">억원</option><option value="1e6" selected>백만원</option><option value="1">원</option></select>
     </label>
   </div>
 </header>
 
 <div class="cycle" id="cycle"></div>
-<div class="seedbar">
-  <span id="seedmsg">성과리포트 값을 불러오는 중입니다.</span>
+<div class="purpose" id="purpose"></div>
+<div class="bar">
+  <span id="seedmsg">불러오는 중…</span>
   <button type="button" id="reseed">서버값으로 다시 채우기</button>
+  <button type="button" id="saveBtn" class="primary">회차 저장</button>
+  <span id="savemsg"></span>
 </div>
 
 <section>
@@ -166,27 +168,25 @@
   <p class="hint" id="hint-close"></p>
   <table class="grid">
     <thead>
-      <tr>
-        <th>구분</th>
-        <th id="th-c1"></th>
-        <th id="th-c2"></th>
-        <th id="th-c3"></th>
-        <th id="th-cd">이번 변동</th>
-      </tr>
+      <tr><th>구분</th><th id="th-c1"></th><th id="th-c2"></th><th id="th-c3"></th><th id="th-cd">이번 변동</th></tr>
     </thead>
     <tbody id="c_body"></tbody>
   </table>
   <div class="prog hide" id="prog-close"></div>
-
   <div class="tolbox" id="tolbox">
     <label>허용 오차 <input id="tol" value="0.5"> %</label>
-    <div class="verdict" id="verdict">확정마감을 입력하면 판정이 표시됩니다.</div>
+    <div class="verdict" id="verdict">값을 입력하면 판정이 표시됩니다.</div>
   </div>
-
   <div class="factors">
     <h3>변동 요인</h3>
+    <p class="lhint">비교 기준 대비 왜 움직였는지 적습니다.</p>
     <div id="c_factors"></div>
-    <button class="add" data-target="c_factors">＋ 요인 추가</button>
+    <button class="add" data-factor="c_factors">＋ 요인 추가</button>
+  </div>
+  <div style="margin-top:18px">
+    <h3 style="font-size:17px;margin:0 0 4px;font-weight:700">특이사항</h3>
+    <p class="lhint" id="note-hint">문안 마감 문단 끝에 그대로 붙습니다.</p>
+    <textarea id="note_close" placeholder="특별히 설명이 필요한 내용이 있으면 적으십시오."></textarea>
   </div>
 </section>
 
@@ -195,24 +195,20 @@
   <p class="hint" id="hint-fcst"></p>
   <table class="grid">
     <thead>
-      <tr>
-        <th>구분</th>
-        <th id="th-f1"></th>
-        <th id="th-f2"></th>
-        <th id="th-f3"></th>
-        <th id="th-fd">이번 변동</th>
-      </tr>
+      <tr><th>구분</th><th id="th-f1"></th><th id="th-f2"></th><th id="th-f3"></th><th id="th-fd">이번 변동</th></tr>
     </thead>
     <tbody id="f_body"></tbody>
   </table>
   <div class="prog hide" id="prog-fcst"></div>
-
   <div class="factors">
     <h3>변동 요인</h3>
+    <p class="lhint">직전 차수 대비 예상이 왜 바뀌었는지 적습니다.</p>
     <div id="f_factors"></div>
-    <button class="add" data-target="f_factors">＋ 요인 추가</button>
+    <button class="add" data-factor="f_factors">＋ 요인 추가</button>
   </div>
 </section>
+
+<div id="listSections"></div>
 
 <div class="out">
   <h2>생성된 문안</h2>
@@ -231,15 +227,23 @@
     <div class="txt empty" id="out_fcst">숫자를 넣으면 여기에 문장이 생깁니다.</div>
     <button class="copy" data-src="out_fcst">복사</button>
   </div>
+  <div class="block" id="block_plan">
+    <div class="lbl" id="lbl_plan">계획</div>
+    <div class="txt empty" id="out_plan">항목을 넣으면 여기에 문장이 생깁니다.</div>
+    <button class="copy" data-src="out_plan">복사</button>
+  </div>
   <button class="copy" id="copyAll">전체 복사</button>
 
+  <details class="hist" id="histBox">
+    <summary>변경 이력</summary>
+    <div id="histBody">아직 저장된 기록이 없습니다.</div>
+  </details>
+
   <p class="note">
-    <b>회의 주기</b>는 25일 가마감 → 익월 5일 1차 실적회의 → 익월 15일 2차 실적회의로 돌아갑니다.<br>
-    <b>값은 성과리포트에서 그대로 가져옵니다.</b> 국내·해외 구분 없이 리포트에 있는 값이 지역·사업분야별로 채워집니다. 비어 있는 칸은 리포트에도 아직 값이 없는 항목이니 직접 넣으시면 됩니다.<br>
-    <b>직접 고친 값은 덮어쓰지 않습니다.</b> 서버 값으로 되돌리려면 위의 다시 채우기 단추를 누르십시오.<br>
-    <b>입력은 국내·해외 × 덴탈·메디컬·에스테틱 6줄</b>이고 소계와 합계는 자동 계산됩니다. 문안 상세도를 바꾸면 문장에 사업분야를 넣을지 국내·해외까지만 쓸지 정할 수 있습니다.<br>
-    회의 구성이나 열 이름을 바꾸려면 <b>narrative_config.py</b> 한 파일만 고치면 됩니다.<br>
-    입력값은 회의·연·월별로 이 브라우저에만 저장됩니다.
+    <b>회차 기록은 서버에 저장됩니다.</b> 다른 PC에서 열어도 같은 내용이 보이고, 누가 언제 무엇을 바꿨는지 이력이 남습니다.<br>
+    <b>편집은 본인 권한 범위 칸만</b> 가능합니다. 범위 밖 칸은 잠겨 있고, 조회는 로그인한 누구나 됩니다.<br>
+    <b>숫자는 성과리포트에서 자동으로 들어옵니다.</b> 비어 있는 칸에만 채워지므로 직접 고친 값은 덮어쓰지 않습니다.<br>
+    회의 구성·입력 항목·권한 범위는 <b>narrative_config.py</b> 한 파일에서 바꿉니다.
   </p>
 </div>
 
@@ -252,10 +256,12 @@ window.onerror = function(msg, src, line, col){
 };
 (function(){
   var CFG = __CONFIG_JSON__;
-  var SEED = {};
+  var SEED = {}, USERS = [], ME = null, SCOPE = {readonly:true, regions:[], businesses:[]};
+  var RECORD = null, dirty = false;
 
-  var BIZ = ["덴탈","메디컬","에스테틱"];
-  var SCOPES = [["dom","국내"],["ovs","해외"]];
+  var BIZ = CFG.businesses || ["덴탈","메디컬","에스테틱"];
+  var REGIONS = CFG.regions || ["국내","해외"];
+  var SCOPES = [["dom", REGIONS[0]], ["ovs", REGIONS[1]]];
   var MEET = CFG.meetings || {};
   var ORDER = CFG.order || Object.keys(MEET);
   var FIELD_OF = CFG.field_of || {};
@@ -318,16 +324,24 @@ window.onerror = function(msg, src, line, col){
   function ym(y,m){ return y + "-" + (m<10 ? "0" : "") + m; }
   function addv(a, b){ return (a===null && b===null) ? null : (a||0) + (b||0); }
   function cfgNow(){ return MEET[$("meeting").value] || MEET[ORDER[0]]; }
+  function roundKey(){ return $("year").value + "-" + ("0"+$("month").value).slice(-2) + ":" + $("meeting").value; }
+  function canEdit(region, business){
+    if (SCOPE.readonly) return false;
+    return (SCOPE.regions||[]).indexOf(region) >= 0 && (SCOPE.businesses||[]).indexOf(business) >= 0;
+  }
+  function markDirty(){ dirty = true; $("savemsg").className = "warn"; $("savemsg").textContent = "저장 안 됨"; }
 
   function buildBody(pfx){
     var h = "";
     for (var s=0;s<SCOPES.length;s++){
       var sk = SCOPES[s][0], sl = SCOPES[s][1];
       for (var b=0;b<BIZ.length;b++){
+        var locked = !canEdit(sl, BIZ[b]);
         h += "<tr><td>" + sl + " " + BIZ[b] + "</td>";
         for (var j=1;j<=3;j++){
-          h += "<td class='c" + j + "'><input class='num' inputmode='numeric' placeholder='0' id='" +
-               pfx + "_" + sk + "_" + b + "_" + j + "'></td>";
+          h += "<td class='c" + j + "'><input class='num' inputmode='numeric' placeholder='0'" +
+               (locked ? " disabled title='편집 권한 범위가 아닙니다'" : "") +
+               " id='" + pfx + "_" + sk + "_" + b + "_" + j + "'></td>";
         }
         h += "<td class='delta' id='" + pfx + "_" + sk + "_" + b + "_d'>—</td></tr>";
       }
@@ -341,34 +355,47 @@ window.onerror = function(msg, src, line, col){
     $(pfx + "_body").innerHTML = h;
   }
 
+  function mkSelect(cls, opts, val){
+    var s = document.createElement("select"); s.className = cls;
+    opts.forEach(function(o){
+      var op = document.createElement("option");
+      if (typeof o === "object"){ op.value = o.value; op.textContent = o.label; }
+      else { op.textContent = o; }
+      s.appendChild(op);
+    });
+    if (val !== undefined && val !== null && val !== "") s.value = val;
+    if (SCOPE.readonly) s.disabled = true;
+    return s;
+  }
+
   function factorRow(target, data){
     data = data || {};
     var row = document.createElement("div");
-    row.className = "frow";
-    function sel(cls, opts, val){
-      var s = document.createElement("select"); s.className = cls;
-      opts.forEach(function(o){ var op=document.createElement("option"); op.textContent=o; s.appendChild(op); });
-      s.value = val || opts[0];
-      return s;
-    }
-    var scope = sel("scope", ["국내","해외"], data.scope);
-    var biz = sel("biz", ["전체"].concat(BIZ), data.biz);
+    row.className = "lrow";
+    var scope = mkSelect("scope", REGIONS, data.scope);
+    var biz = mkSelect("biz", ["전체"].concat(BIZ), data.biz);
     var who = document.createElement("input");
-    who.type="text"; who.className="who"; who.placeholder="대상 (예: 말레이시아 A1 Bone Chip)"; who.value = data.who || "";
+    who.type="text"; who.className="who"; who.placeholder="대상 (예: 말레이시아 A1 Bone Chip)";
+    who.value = data.who || ""; if (SCOPE.readonly) who.disabled = true;
+    var whoWrap = document.createElement("div"); whoWrap.className="grow"; whoWrap.appendChild(who);
+    whoWrap.style.padding = "0";
     var amt = document.createElement("input");
-    amt.type="text"; amt.className="amt num"; amt.inputMode="numeric"; amt.placeholder="금액"; amt.value = data.amt || "";
-    var why = sel("why", Object.keys(REASONS), data.why);
+    amt.type="text"; amt.className="amt num"; amt.inputMode="numeric"; amt.placeholder="금액";
+    amt.value = data.amt || ""; if (SCOPE.readonly) amt.disabled = true;
+    var why = mkSelect("why", Object.keys(REASONS), data.why);
     var del = document.createElement("button");
-    del.className="x del"; del.type="button"; del.textContent="×"; del.setAttribute("aria-label","요인 삭제");
-    del.addEventListener("click", function(){ row.remove(); render(); });
+    del.className="x del"; del.type="button"; del.textContent="×";
+    del.disabled = SCOPE.readonly;
+    del.addEventListener("click", function(){ row.remove(); markDirty(); render(); });
+    var delWrap = document.createElement("div"); delWrap.className="del"; delWrap.appendChild(del);
     row.appendChild(scope); row.appendChild(biz); row.appendChild(who);
-    row.appendChild(amt); row.appendChild(why); row.appendChild(del);
+    row.appendChild(amt); row.appendChild(why); row.appendChild(delWrap);
     $(target).appendChild(row);
     return row;
   }
   function readFactors(target){
     var out = [];
-    document.querySelectorAll("#"+target+" .frow").forEach(function(r){
+    document.querySelectorAll("#"+target+" .lrow").forEach(function(r){
       var amt = amtOf(r.querySelector(".amt").value);
       var who = r.querySelector(".who").value.trim();
       if (amt === null && !who) return;
@@ -379,7 +406,7 @@ window.onerror = function(msg, src, line, col){
   }
   function rawFactors(target){
     var out = [];
-    document.querySelectorAll("#"+target+" .frow").forEach(function(r){
+    document.querySelectorAll("#"+target+" .lrow").forEach(function(r){
       out.push({scope:r.querySelector(".scope").value, biz:r.querySelector(".biz").value,
                 who:r.querySelector(".who").value, amt:r.querySelector(".amt").value,
                 why:r.querySelector(".why").value});
@@ -398,9 +425,105 @@ window.onerror = function(msg, src, line, col){
     return list.slice(0,-1).join(", ") + ", " + list[list.length-1];
   }
 
+  // ---- 회의별 추가 입력표 ----
+  function buildLists(){
+    var host = $("listSections");
+    host.innerHTML = "";
+    var lists = (cfgNow().lists) || [];
+    lists.forEach(function(spec){
+      var sec = document.createElement("section");
+      sec.className = "lists";
+      var req = (spec.required || []);
+      var head = "<h2>" + spec.title + (req.length ? "<span class='req'>담당·기한 필수</span>" : "") + "</h2>";
+      head += "<p class='hint'>" + (spec.hint || "") + "</p>";
+      head += "<div id='list_" + spec.id + "'></div>";
+      head += "<button class='add' data-list='" + spec.id + "'>＋ 항목 추가</button>";
+      sec.innerHTML = head;
+      host.appendChild(sec);
+    });
+    host.querySelectorAll("button.add[data-list]").forEach(function(b){
+      b.disabled = SCOPE.readonly;
+      b.addEventListener("click", function(){
+        listRow(b.getAttribute("data-list"), {});
+        markDirty(); render();
+      });
+    });
+  }
+  function listSpec(id){
+    var lists = (cfgNow().lists) || [];
+    for (var i=0;i<lists.length;i++) if (lists[i].id === id) return lists[i];
+    return null;
+  }
+  function listRow(id, data){
+    var spec = listSpec(id);
+    if (!spec) return;
+    data = data || {};
+    var row = document.createElement("div");
+    row.className = "lrow";
+    row.setAttribute("data-list", id);
+    spec.cols.forEach(function(c){
+      var el;
+      if (c.type === "user"){
+        var opts = [{value:"", label:"담당 선택"}].concat(USERS.map(function(u){
+          return {value:u.display_name, label:u.display_name};
+        }));
+        el = mkSelect("f_" + c.key, opts, data[c.key]);
+      } else if (c.type === "select"){
+        el = mkSelect("f_" + c.key, c.options || [], data[c.key]);
+      } else {
+        el = document.createElement("input");
+        el.className = "f_" + c.key + (c.type === "amount" ? " amt num" : "");
+        el.type = (c.type === "date") ? "date" : "text";
+        if (c.type === "amount") el.inputMode = "numeric";
+        el.placeholder = c.label;
+        el.value = data[c.key] || "";
+        if (SCOPE.readonly) el.disabled = true;
+      }
+      if (c.type === "text" && (c.key === "what" || c.key === "trigger")) {
+        var w = document.createElement("div"); w.className = "grow"; w.style.padding = "0";
+        w.appendChild(el); row.appendChild(w);
+      } else {
+        row.appendChild(el);
+      }
+    });
+    var del = document.createElement("button");
+    del.className = "x"; del.type = "button"; del.textContent = "×";
+    del.disabled = SCOPE.readonly;
+    del.addEventListener("click", function(){ row.remove(); markDirty(); render(); });
+    var dw = document.createElement("div"); dw.className = "del"; dw.appendChild(del);
+    row.appendChild(dw);
+    $("list_" + id).appendChild(row);
+    return row;
+  }
+  function readList(id){
+    var spec = listSpec(id);
+    if (!spec) return [];
+    var out = [];
+    document.querySelectorAll("#list_" + id + " .lrow").forEach(function(r){
+      var row = {}, has = false;
+      spec.cols.forEach(function(c){
+        var el = r.querySelector(".f_" + c.key);
+        var v = el ? el.value : "";
+        row[c.key] = v;
+        if (v && c.type !== "select") has = true;
+      });
+      if (has) out.push(row);
+    });
+    return out;
+  }
+  function listPhrase(spec, row){
+    var out = spec.sentence || "";
+    spec.cols.forEach(function(c){
+      var v = row[c.key] || "";
+      if (c.type === "amount"){ var n = amtOf(v); v = (n === null ? "" : fmtAbs(n)); }
+      if (c.key === "biz" && v === "전체") v = "";
+      out = out.split("{" + c.key + "}").join(v);
+    });
+    return out.replace(/\s+/g, " ").replace(/\s+([,.)])/g, "$1").trim();
+  }
+
   function doSection(pfx, spec, thPrefix, progId){
     var n = spec.cols.length, cur = spec.cur;
-
     for (var i=1;i<=3;i++){
       var th = $(thPrefix + i);
       if (i <= n) th.textContent = spec.cols[i-1];
@@ -408,17 +531,14 @@ window.onerror = function(msg, src, line, col){
       th.style.display = (i <= n) ? "" : "none";
     }
     $(thPrefix + "d").textContent = spec.cols[cur-2] + " 대비";
-
     for (var j=1;j<=3;j++){
-      var show = (j <= n) ? "" : "none";
-      var isCur = (j === cur);
+      var show = (j <= n) ? "" : "none", isCur = (j === cur);
       var cells = document.querySelectorAll("#" + pfx + "_body .c" + j);
       for (var q=0;q<cells.length;q++){
         cells[q].style.display = show;
         cells[q].className = "c" + j + (isCur ? " cur" : "");
       }
     }
-
     var data = {};
     for (var s=0;s<SCOPES.length;s++){
       var sk = SCOPES[s][0];
@@ -438,7 +558,6 @@ window.onerror = function(msg, src, line, col){
       paintDelta($(pfx+"_"+sk+"_sub_d"), sD);
       data[sk] = {rows:rows, sub:sub, sD:sD};
     }
-
     var tot = [];
     for (var t=0;t<3;t++){
       tot.push(addv(data.dom.sub[t], data.ovs.sub[t]));
@@ -454,18 +573,12 @@ window.onerror = function(msg, src, line, col){
       for (var q2=0;q2<n;q2++){
         if (tot[q2] === null) continue;
         var seg = spec.cols[q2] + " <b>" + fmt(tot[q2]) + "</b>";
-        if (prevIdx >= 0){
-          var dd = tot[q2] - tot[prevIdx];
-          seg += " (" + sgn(dd) + fmtAbs(dd) + ")";
-        }
-        prevIdx = q2;
-        parts.push(seg);
+        if (prevIdx >= 0){ var dd = tot[q2] - tot[prevIdx]; seg += " (" + sgn(dd) + fmtAbs(dd) + ")"; }
+        prevIdx = q2; parts.push(seg);
       }
       progEl.innerHTML = "차수 진행 &nbsp;" + parts.join(" &nbsp;→&nbsp; ");
       progEl.className = "prog";
-    } else {
-      progEl.className = "prog hide";
-    }
+    } else { progEl.className = "prog hide"; }
 
     return {data:data, tot:tot, tD:tD, n:n, cur:cur};
   }
@@ -486,7 +599,6 @@ window.onerror = function(msg, src, line, col){
     }
     return s + "입니다.";
   }
-
   function trajectory(spec, tot){
     var parts = [];
     for (var i=0;i<spec.cols.length;i++){
@@ -500,16 +612,16 @@ window.onerror = function(msg, src, line, col){
     var cfg = cfgNow();
     var detail = $("detail").value;
     var y = Number($("year").value), m = Number($("month").value);
-    var cM = shift(y, m, cfg.close.off);
-    var fM = shift(y, m, cfg.fcst.off);
+    var cM = shift(y, m, cfg.close.off), fM = shift(y, m, cfg.fcst.off);
     var cValLabel = cfg.close.cols[cfg.close.cur-1];
     var fValLabel = cfg.fcst.cols[cfg.fcst.cur-1];
 
     var chain = ORDER.map(function(k){ return MEET[k].label + " " + MEET[k].when; }).join(" → ");
     $("cycle").innerHTML = "회의 주기 &nbsp;<b>" + chain + "</b> → 다시 처음으로" +
-      "<br>지금 선택: <span class=\"now\">" + y + "년 " + m + "월 " + cfg.label + " (" + cfg.when + ")</span> · " +
+      "<br>지금 선택: <span class=\"now\">" + y + "년 " + m + "월 " + cfg.label + "</span> · " +
       "보고 대상 <span class=\"now\">" + cM.m + "월 " + cValLabel + "</span> + " +
       "<span class=\"now\">" + fM.m + "월 " + fValLabel + "</span>";
+    $("purpose").textContent = cfg.purpose || "";
 
     $("h-close").textContent = cM.m + "월 " + cValLabel;
     $("hint-close").textContent = cfg.close.cols.join(" → ") + " 흐름입니다. 진한 열이 이번 회의 보고값입니다.";
@@ -521,27 +633,31 @@ window.onerror = function(msg, src, line, col){
     var C = doSection("c", cfg.close, "th-c", "prog-close");
     var F = doSection("f", cfg.fcst,  "th-f", "prog-fcst");
 
-    var tolTxt = "";
+    var tolTxt = "", needNote = false;
     $("tolbox").className = cfg.tol ? "tolbox on" : "tolbox";
     if (cfg.tol){
       var tol = parseNum($("tol").value); if (tol === null) tol = 0.5;
-      var vEl = $("verdict");
+      var vEl = $("verdict"), baseLabel = cfg.close.cols[C.cur-2];
       if (C.tD && C.tD.r !== null){
         var ar = Math.abs(C.tD.r);
         if (ar <= tol){
           vEl.className = "verdict ok";
-          vEl.textContent = "정상 — " + cfg.close.cols[C.cur-2] + " 대비 " + ar.toFixed(2) + "% (허용 " + tol + "% 이내)";
-          tolTxt = " " + cfg.close.cols[C.cur-2] + " 대비 차이는 허용 오차 이내로 마감 정확도는 정상입니다.";
+          vEl.textContent = "정상 — " + baseLabel + " 대비 " + ar.toFixed(2) + "% (허용 " + tol + "% 이내)";
+          tolTxt = " " + baseLabel + " 대비 차이는 허용 오차 이내로 마감 정확도는 정상입니다.";
         } else {
           vEl.className = "verdict warn";
-          vEl.textContent = "확인 필요 — " + cfg.close.cols[C.cur-2] + " 대비 " + ar.toFixed(2) + "% (허용 " + tol + "% 초과)";
-          tolTxt = " " + cfg.close.cols[C.cur-2] + " 대비 차이가 허용 오차 " + tol + "%를 초과해 원인 확인이 필요합니다.";
+          vEl.textContent = "특이사항 필요 — " + baseLabel + " 대비 " + ar.toFixed(2) + "% (허용 " + tol + "% 초과)";
+          tolTxt = " " + baseLabel + " 대비 차이가 허용 오차 " + tol + "%를 초과했습니다.";
+          needNote = true;
         }
       } else {
         vEl.className = "verdict";
         vEl.textContent = cValLabel + "을 입력하면 판정이 표시됩니다.";
       }
     }
+    $("note-hint").textContent = needNote
+      ? "허용 오차를 넘었습니다. 원인을 적어주십시오. 문안에 그대로 들어갑니다."
+      : "문안 마감 문단 끝에 그대로 붙습니다.";
 
     var cf = readFactors("c_factors"), ff = readFactors("f_factors");
 
@@ -553,14 +669,16 @@ window.onerror = function(msg, src, line, col){
         if (C.tD.r !== null) closeTxt += "(" + Math.abs(C.tD.r).toFixed(1) + "%)";
         closeTxt += " " + C.tD.word + "했습니다.";
       } else { closeTxt += "입니다."; }
-      var cs1 = regionSentence(C, "dom", "국내", detail);
-      var cs2 = regionSentence(C, "ovs", "해외", detail);
+      var cs1 = regionSentence(C, "dom", REGIONS[0], detail);
+      var cs2 = regionSentence(C, "ovs", REGIONS[1], detail);
       if (cs1) closeTxt += " " + cs1;
       if (cs2) closeTxt += " " + cs2;
       closeTxt += trajectory(cfg.close, C.tot);
       var cp = cf.map(factorPhrase).filter(Boolean);
       if (cp.length) closeTxt += " 주요 변동 요인은 " + joinPhrases(cp) + "된 데 따른 것입니다.";
       closeTxt += tolTxt;
+      var nt = $("note_close").value.trim();
+      if (nt) closeTxt += " " + nt;
     }
 
     var fcstTxt = "";
@@ -571,24 +689,41 @@ window.onerror = function(msg, src, line, col){
         if (F.tD.r !== null) fcstTxt += "(" + Math.abs(F.tD.r).toFixed(1) + "%)";
         fcstTxt += " " + F.tD.word + "했습니다.";
       } else { fcstTxt += "입니다."; }
-      var fs1 = regionSentence(F, "dom", "국내", detail);
-      var fs2 = regionSentence(F, "ovs", "해외", detail);
+      var fs1 = regionSentence(F, "dom", REGIONS[0], detail);
+      var fs2 = regionSentence(F, "ovs", REGIONS[1], detail);
       if (fs1) fcstTxt += " " + fs1;
       if (fs2) fcstTxt += " " + fs2;
       fcstTxt += trajectory(cfg.fcst, F.tot);
-      var dp = ff.filter(function(f){return f.scope==="국내";}).map(factorPhrase).filter(Boolean);
-      var op = ff.filter(function(f){return f.scope==="해외";}).map(factorPhrase).filter(Boolean);
-      if (dp.length) fcstTxt += " 국내는 " + joinPhrases(dp) + "된 영향입니다.";
-      if (op.length) fcstTxt += " 해외는 " + joinPhrases(op) + "된 영향입니다.";
+      var dp = ff.filter(function(f){return f.scope===REGIONS[0];}).map(factorPhrase).filter(Boolean);
+      var op = ff.filter(function(f){return f.scope===REGIONS[1];}).map(factorPhrase).filter(Boolean);
+      if (dp.length) fcstTxt += " " + REGIONS[0] + "는 " + joinPhrases(dp) + "된 영향입니다.";
+      if (op.length) fcstTxt += " " + REGIONS[1] + "는 " + joinPhrases(op) + "된 영향입니다.";
     }
+
+    var planTxt = "", planLabel = "계획";
+    ((cfg.lists) || []).forEach(function(spec){
+      var rows = readList(spec.id);
+      planLabel = spec.title;
+      if (!rows.length) return;
+      var ps = rows.map(function(r){ return listPhrase(spec, r); }).filter(Boolean);
+      if (!ps.length) return;
+      planTxt += (planTxt ? " " : "") + (spec.lead || "") + joinPhrases(ps) + (spec.tail || "");
+    });
+    $("lbl_plan").textContent = planLabel;
+    $("block_plan").style.display = ((cfg.lists) || []).length ? "" : "none";
 
     var hp = [];
     if (C.tot[C.cur-1] !== null) hp.push(cM.m + "월 " + cfg.close.word + " " + fmt(C.tot[C.cur-1]) + (C.tD && C.tD.d !== 0 ? " · " + cfg.close.cols[C.cur-2] + " 대비 " + sgn(C.tD.d) + fmtAbs(C.tD.d) : ""));
     if (F.tot[F.cur-1] !== null) hp.push(fM.m + "월 " + fValLabel + " " + fmt(F.tot[F.cur-1]) + (F.tD && F.tD.d !== 0 ? " · " + cfg.fcst.cols[F.cur-2] + " 대비 " + sgn(F.tD.d) + fmtAbs(F.tD.d) : ""));
 
-    setOut("out_head", hp.join("  |  ")); setOut("out_close", closeTxt); setOut("out_fcst", fcstTxt);
-    save();
+    setOut("out_head", hp.join("  |  "));
+    setOut("out_close", closeTxt);
+    setOut("out_fcst", fcstTxt);
+    setOut("out_plan", planTxt);
+    LAST = {close:closeTxt, fcst:fcstTxt, head:hp.join("  |  "), plan:planTxt,
+            totals:{close:C.tot[C.cur-1], fcst:F.tot[F.cur-1]}};
   }
+  var LAST = {};
 
   function setOut(id, txt){
     var el = $(id);
@@ -618,29 +753,95 @@ window.onerror = function(msg, src, line, col){
     var ids = ["tol"];
     ["c","f"].forEach(function(pfx){
       SCOPES.forEach(function(sc){
-        for (var b=0;b<BIZ.length;b++){
-          for (var j=1;j<=3;j++) ids.push(pfx+"_"+sc[0]+"_"+b+"_"+j);
-        }
+        for (var b=0;b<BIZ.length;b++) for (var j=1;j<=3;j++) ids.push(pfx+"_"+sc[0]+"_"+b+"_"+j);
       });
     });
     return ids;
   }
   var FIELDS = [];
-  var saveTimer = null;
-  function stateKey(){
-    return "perfnarr4:" + $("meeting").value + ":" + $("year").value + "-" + ("0" + $("month").value).slice(-2);
-  }
+
   function collect(){
-    var o = {unit:$("unit").value, inunit:$("inunit").value, detail:$("detail").value, fields:{},
-             cf:rawFactors("c_factors"), ff:rawFactors("f_factors")};
-    FIELDS.forEach(function(id){ if ($(id)) o.fields[id] = $(id).value; });
-    return o;
+    var lists = {};
+    ((cfgNow().lists) || []).forEach(function(spec){
+      var rows = [];
+      document.querySelectorAll("#list_" + spec.id + " .lrow").forEach(function(r){
+        var row = {};
+        spec.cols.forEach(function(c){
+          var el = r.querySelector(".f_" + c.key);
+          row[c.key] = el ? el.value : "";
+        });
+        rows.push(row);
+      });
+      lists[spec.id] = rows;
+    });
+    var numbers = {};
+    FIELDS.forEach(function(id){ if ($(id)) numbers[id] = $(id).value; });
+    numbers["note_close"] = $("note_close").value;
+    return {
+      numbers: numbers,
+      factors: {c: rawFactors("c_factors"), f: rawFactors("f_factors")},
+      lists: lists,
+      narratives: {head:LAST.head||"", close:LAST.close||"", fcst:LAST.fcst||"", plan:LAST.plan||""},
+      meta: {unit:$("unit").value, inunit:$("inunit").value, detail:$("detail").value, totals:LAST.totals||{}}
+    };
   }
-  function save(){
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(function(){
-      try { localStorage.setItem(stateKey(), JSON.stringify(collect())); } catch(e){}
-    }, 300);
+
+  function saveRound(){
+    if (SCOPE.readonly){
+      $("savemsg").className = "warn";
+      $("savemsg").textContent = "조회 전용 권한이라 저장할 수 없습니다";
+      return;
+    }
+    var body = collect();
+    body.key = roundKey();
+    $("savemsg").className = ""; $("savemsg").textContent = "저장 중…";
+    fetch("/narrative-round", {
+      method:"POST", credentials:"same-origin",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(body)
+    }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+      .then(function(res){
+        if (!res.ok) throw new Error((res.j && res.j.error) || "실패");
+        RECORD = res.j.record; dirty = false;
+        $("savemsg").className = "ok";
+        $("savemsg").textContent = "저장됨 " + (RECORD.updated_at || "");
+        renderHistory();
+      })
+      .catch(function(e){
+        $("savemsg").className = "warn";
+        $("savemsg").textContent = "저장 실패: " + e.message;
+      });
+  }
+
+  function renderHistory(){
+    var box = $("histBody");
+    var h = (RECORD && RECORD.history) || [];
+    if (!h.length){ box.textContent = "아직 저장된 기록이 없습니다."; return; }
+    var items = h.slice().reverse().slice(0, 20).map(function(x){
+      return "<li>" + (x.at || "") + " · " + (x.by || "?") +
+             (x.changed && x.changed.length ? " · " + x.changed.join(", ") : "") +
+             (x.note ? " · " + x.note : "") + "</li>";
+    }).join("");
+    box.innerHTML = "<ul>" + items + "</ul>";
+  }
+
+  function applyRecord(rec){
+    RECORD = rec;
+    if (!rec) return;
+    var meta = rec.meta || {};
+    if (meta.unit) $("unit").value = meta.unit;
+    if (meta.inunit) $("inunit").value = meta.inunit;
+    if (meta.detail) $("detail").value = meta.detail;
+    var nums = rec.numbers || {};
+    FIELDS.forEach(function(id){ if (nums[id] !== undefined && $(id)) $(id).value = nums[id]; });
+    if (nums["note_close"] !== undefined) $("note_close").value = nums["note_close"];
+    var f = rec.factors || {};
+    (f.c || []).forEach(function(x){ factorRow("c_factors", x); });
+    (f.f || []).forEach(function(x){ factorRow("f_factors", x); });
+    var lists = rec.lists || {};
+    Object.keys(lists).forEach(function(id){
+      (lists[id] || []).forEach(function(row){ listRow(id, row); });
+    });
   }
 
   function fillSection(pfx, cols, d){
@@ -682,55 +883,53 @@ window.onerror = function(msg, src, line, col){
   function fetchSeed(done){
     var ps = periodsNeeded();
     $("seedmsg").className = "";
-    $("seedmsg").textContent = "성과리포트 값을 불러오는 중입니다 (" + ps.join(", ") + ")";
+    $("seedmsg").textContent = "성과리포트 값 불러오는 중 (" + ps.join(", ") + ")";
     fetch("/narrative-data?periods=" + encodeURIComponent(ps.join(",")), {credentials:"same-origin"})
-      .then(function(r){
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      })
+      .then(function(r){ if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(function(j){
         SEED = j.data || {};
         var n = done();
         $("seedmsg").className = "";
-        $("seedmsg").textContent = n > 0
-          ? ps.join(", ") + " 값 " + n + "칸을 성과리포트에서 채웠습니다."
-          : ps.join(", ") + " 는 리포트에 채울 값이 없거나 이미 입력돼 있습니다.";
+        $("seedmsg").textContent = n > 0 ? ps.join(", ") + " 값 " + n + "칸 자동 입력" : ps.join(", ") + " 자동 입력할 값 없음";
       })
       .catch(function(e){
         $("seedmsg").className = "warn";
-        $("seedmsg").textContent = "성과리포트 값을 불러오지 못했습니다 (" + e.message + "). 직접 입력하시면 됩니다.";
+        $("seedmsg").textContent = "리포트 값 실패 (" + e.message + "). 직접 입력하십시오.";
         done();
       });
   }
-  function clearNumbers(){
-    FIELDS.forEach(function(id){ if (id !== "tol" && $(id)) $(id).value = ""; });
-  }
+  function clearNumbers(){ FIELDS.forEach(function(id){ if (id !== "tol" && $(id)) $(id).value = ""; }); }
   function clearAll(){
     clearNumbers();
+    $("note_close").value = "";
     $("c_factors").innerHTML = ""; $("f_factors").innerHTML = "";
+    ((cfgNow().lists) || []).forEach(function(s){ var el = $("list_" + s.id); if (el) el.innerHTML = ""; });
   }
   var prevInF = 1;
   function ensureRows(){
     prevInF = inF();
-    if (!document.querySelector("#c_factors .frow")) factorRow("c_factors");
-    if (!document.querySelector("#f_factors .frow")) factorRow("f_factors");
+    if (!document.querySelector("#c_factors .lrow")) factorRow("c_factors");
+    if (!document.querySelector("#f_factors .lrow")) factorRow("f_factors");
+    ((cfgNow().lists) || []).forEach(function(s){
+      if (!document.querySelector("#list_" + s.id + " .lrow")) listRow(s.id, {});
+    });
   }
   function load(){
-    var o = null;
-    try { var raw = localStorage.getItem(stateKey()); if (raw) o = JSON.parse(raw); } catch(e){}
+    buildBody("c"); buildBody("f"); buildLists();
+    FIELDS = allFields();
     clearAll();
-    if (o){
-      if (o.unit) $("unit").value = o.unit;
-      if (o.inunit) $("inunit").value = o.inunit;
-      if (o.detail) $("detail").value = o.detail;
-      FIELDS.forEach(function(id){ if (o.fields && o.fields[id] !== undefined && $(id)) $(id).value = o.fields[id]; });
-      (o.cf||[]).forEach(function(f){ factorRow("c_factors", f); });
-      (o.ff||[]).forEach(function(f){ factorRow("f_factors", f); });
-    }
-    prevInF = inF();
-    ensureRows();
-    render();
-    fetchSeed(function(){ var n = seed(); render(); return n; });
+    dirty = false; $("savemsg").textContent = ""; $("savemsg").className = "";
+    fetch("/narrative-round?key=" + encodeURIComponent(roundKey()), {credentials:"same-origin"})
+      .then(function(r){ return r.json(); })
+      .then(function(j){ applyRecord(j.record); })
+      .catch(function(){})
+      .then(function(){
+        prevInF = inF();
+        ensureRows();
+        renderHistory();
+        render();
+        fetchSeed(function(){ var n = seed(); render(); return n; });
+      });
   }
   function convertInputs(){
     var f = inF();
@@ -754,22 +953,20 @@ window.onerror = function(msg, src, line, col){
       ms.appendChild(op);
     });
     var sel = $("month");
+    var now = new Date();
     for (var i=1;i<=12;i++){
       var op2 = document.createElement("option");
       op2.value = i; op2.textContent = i + "월";
-      if (i === 9) op2.selected = true;
+      if (i === (now.getMonth() + 1)) op2.selected = true;
       sel.appendChild(op2);
     }
   })();
 
-  buildBody("c");
-  buildBody("f");
-  FIELDS = allFields();
-
   $("reseed").addEventListener("click", function(){
     clearNumbers();
-    fetchSeed(function(){ var n = seed(); render(); return n; });
+    fetchSeed(function(){ var n = seed(); render(); markDirty(); return n; });
   });
+  $("saveBtn").addEventListener("click", saveRound);
   document.querySelectorAll("button.copy[data-src]").forEach(function(b){
     b.addEventListener("click", function(){
       var el = $(b.getAttribute("data-src"));
@@ -779,23 +976,23 @@ window.onerror = function(msg, src, line, col){
   });
   $("copyAll").addEventListener("click", function(){
     var out = [];
-    ["out_close","out_fcst"].forEach(function(id){
+    ["out_close","out_fcst","out_plan"].forEach(function(id){
       var el = $(id); if (!el.classList.contains("empty")) out.push(el.textContent);
     });
     if (out.length) copyText(out.join("\n\n"), $("copyAll"));
   });
-  document.querySelectorAll("button.add").forEach(function(b){
-    b.addEventListener("click", function(){ factorRow(b.getAttribute("data-target")); });
+  document.querySelectorAll("button.add[data-factor]").forEach(function(b){
+    b.addEventListener("click", function(){ factorRow(b.getAttribute("data-factor")); markDirty(); render(); });
   });
   document.addEventListener("input", function(e){
-    if (e.target.matches("input, select")) render();
+    if (e.target.matches("input, select, textarea")){ markDirty(); render(); }
   });
   document.addEventListener("change", function(e){
     if (!e.target.matches("select")) return;
     var id = e.target.id;
-    if (id === "meeting" || id === "year" || id === "month") { load(); return; }
+    if (id === "meeting" || id === "year" || id === "month"){ load(); return; }
     if (id === "inunit") convertInputs();
-    render();
+    markDirty(); render();
   });
   document.addEventListener("blur", function(e){
     if (e.target.classList && e.target.classList.contains("num")){
@@ -804,8 +1001,20 @@ window.onerror = function(msg, src, line, col){
       render();
     }
   }, true);
+  window.addEventListener("beforeunload", function(e){
+    if (dirty){ e.preventDefault(); e.returnValue = ""; }
+  });
 
-  load();
+  fetch("/narrative-users", {credentials:"same-origin"})
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      USERS = j.users || []; ME = j.me || null; SCOPE = j.scope || SCOPE;
+      $("whoami").innerHTML = (ME ? ME.display_name : "?") + " · 편집 범위 " +
+        "<span class='pill" + (SCOPE.readonly ? " ro" : "") + "'>" + (SCOPE.label || "조회 전용") + "</span>";
+      if (SCOPE.readonly){ $("saveBtn").disabled = true; $("note_close").disabled = true; }
+    })
+    .catch(function(){ $("whoami").textContent = "사용자 정보를 불러오지 못했습니다"; })
+    .then(load);
 })();
 </script>
 </body>
