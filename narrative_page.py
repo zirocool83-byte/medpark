@@ -1,17 +1,29 @@
 """회의 문안 생성기 페이지와 API.
 
 값은 성과리포트가 이미 들고 있는 데이터에서 가져오고,
-회의별 입력(변동 요인·계획·백업플랜)과 완성 문안은 회차별로 서버에 남긴다.
+회의별 입력과 완성 문안은 회차별로 서버에 남긴다.
 
-리포트는 "그 달의 가마감·마감"을 다음 달 행의 prev_* 필드로 들고 있다.
-(8월 가마감 = 9월 리포트의 prev_preclose)
-그래서 한 달치를 만들 때 당월과 익월 리포트를 함께 읽어 정규화한다.
+두 가지 보정이 들어간다.
 
-회의 구성·입력 항목·권한 범위는 narrative_config.py에서만 고친다.
+1) 가마감
+   리포트는 "그 달의 가마감·마감"을 다음 달 행의 prev_* 로 들고 있다.
+   (8월 가마감 = 9월 리포트의 prev_preclose)
+   그래서 한 달치를 만들 때 당월과 익월 리포트를 함께 읽어 정규화한다.
+
+2) 잠정마감 보존
+   SalesOps는 잠정과 확정을 한 칸(final_close_amount)에 담는다.
+   10일경 확정으로 잠기면 잠정 값이 덮여 사라지므로,
+   마감값을 처음 본 시점에 한 번만 별도 파일에 기록해 둔다. 이후 덮어쓰지 않는다.
+   그래야 2차 실적회의에서 잠정 ↔ 확정 비교가 남는다.
+
+국내는 SalesOps가 유일한 입력 창구다.
+이 화면에서는 config의 editable_regions 밖 지역을 아무도 편집할 수 없다.
 """
 
 import json
+import os
 import re
+import time
 from pathlib import Path
 
 import browser_bridge as prev
@@ -33,6 +45,7 @@ OWN_FIELDS = ("first", "second", "third_confirmed", "third_forecast", "close", "
 PREV_MAP = {"prev_first": "first", "prev_preclose": "preclose", "prev_close": "close"}
 
 STORE = store_mod.RoundStore(base.DATA_DIR)
+PROV_PATH = Path(base.DATA_DIR) / "narrative_provisional_close.json"
 
 
 def _config():
@@ -54,6 +67,54 @@ def _to_int(value):
     except Exception:
         return None
 
+
+# ---------- 잠정마감 보존 ----------
+
+def _read_prov():
+    try:
+        with open(PROV_PATH, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        if isinstance(payload, dict):
+            return payload
+    except Exception:
+        pass
+    return {}
+
+
+def _write_prov(payload):
+    PROV_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = str(PROV_PATH) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, PROV_PATH)
+
+
+def _apply_provisional(period, rows):
+    """마감값을 처음 본 시점에 잠정으로 기록하고, 기록된 값을 provisional로 실어 준다."""
+    payload = _read_prov()
+    record = dict(payload.get(period) or {})
+    changed = False
+    for region, businesses in rows.items():
+        for business, values in businesses.items():
+            key = region + "|" + business
+            close = values.get("close")
+            if key not in record and close is not None:
+                record[key] = {"amount": close, "captured_at": time.strftime("%Y-%m-%d %H:%M:%S")}
+                changed = True
+            if key in record:
+                values["provisional"] = record[key].get("amount")
+    if changed:
+        payload[period] = record
+        try:
+            _write_prov(payload)
+        except Exception:
+            pass
+    return rows
+
+
+# ---------- 리포트 읽기 ----------
 
 def _merge(out, report, mapping):
     if not report:
@@ -87,8 +148,10 @@ def _period_rows(year, month):
     _merge(out, _build(year, month), {f: f for f in OWN_FIELDS})
     ny, nm = (year + 1, 1) if month == 12 else (year, month + 1)
     _merge(out, _build(ny, nm), PREV_MAP)
-    return out
+    return _apply_provisional("%04d-%02d" % (year, month), out)
 
+
+# ---------- 사용자·권한 ----------
 
 def _current_user():
     try:
@@ -98,7 +161,16 @@ def _current_user():
 
 
 def _my_scope(user):
-    return store_mod.scope_of(user, _config().get("scopes") or {})
+    cfg = _config()
+    scope = store_mod.scope_of(user, cfg.get("scopes") or {})
+    allowed = cfg.get("editable_regions")
+    if allowed:
+        regions = [r for r in (scope.get("regions") or []) if r in allowed]
+        scope["regions"] = regions
+        scope["readonly"] = not (regions and scope.get("businesses"))
+        scope["label"] = ("/".join(regions) + " " + "·".join(scope.get("businesses") or [])).strip() or "조회 전용"
+        scope["locked_regions"] = [r for r in (cfg.get("regions") or []) if r not in allowed]
+    return scope
 
 
 def _active_users():
@@ -119,6 +191,8 @@ def _active_users():
     return out
 
 
+# ---------- 화면 ----------
+
 @app.get("/narrative")
 def narrative_page():
     if not _current_user():
@@ -130,7 +204,7 @@ def narrative_page():
     html = html.replace("__CONFIG_JSON__", json.dumps(_config(), ensure_ascii=False))
     resp = make_response(html)
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
-    resp.headers["X-MedPark-Narrative"] = "narrative-6.1"
+    resp.headers["X-MedPark-Narrative"] = "narrative-7.0"
     return resp
 
 
@@ -209,11 +283,6 @@ def narrative_round_save():
 
 @app.get("/narrative-round-delete")
 def narrative_round_delete():
-    """회차 기록 한 건을 지운다.
-
-    confirm=yes 를 붙여야 실제로 지운다. 붙이지 않으면 지울 내용만 보여준다.
-    실적 원장과는 무관한 별도 파일만 건드린다.
-    """
     user = _current_user()
     if not user:
         return jsonify({"error": "unauthorized"}), 401
@@ -222,7 +291,6 @@ def narrative_round_delete():
     key = (request.args.get("key") or "").strip()
     if not KEY_RE.match(key):
         return jsonify({"error": "bad_key", "keys": STORE.list_keys()}), 400
-
     payload = STORE._read()
     rounds = payload.get("rounds") or {}
     record = rounds.get(key)
@@ -230,13 +298,9 @@ def narrative_round_delete():
         return jsonify({"deleted": False, "reason": "not_found", "key": key, "keys": sorted(rounds.keys())}), 404
     if request.args.get("confirm") != "yes":
         return jsonify({
-            "deleted": False,
-            "reason": "confirm_required",
-            "key": key,
+            "deleted": False, "reason": "confirm_required", "key": key,
             "updated_at": record.get("updated_at"),
-            "updated_by": (record.get("updated_by") or {}).get("display_name"),
-            "revisions": len(record.get("history") or []),
-            "hint": "같은 주소 끝에 &confirm=yes 를 붙이면 지웁니다.",
+            "hint": "주소 끝에 &confirm=yes 를 붙이면 지웁니다.",
         }), 409
     rounds.pop(key, None)
     try:
@@ -253,33 +317,12 @@ def narrative_rounds():
     return jsonify({"rounds": STORE.summaries(), "keys": STORE.list_keys()})
 
 
-@app.get("/narrative-fields")
-def narrative_fields():
+@app.get("/narrative-provisional")
+def narrative_provisional():
+    """보존된 잠정마감 기록. 잘못 잡혔을 때 확인용."""
     if not _current_user():
         return jsonify({"error": "unauthorized"}), 401
-    try:
-        year = int(request.args.get("year", 2026))
-        month = int(request.args.get("month", 9))
-    except Exception:
-        year, month = 2026, 9
-    report = _build(year, month)
-    if report is None:
-        return jsonify({"error": "report_build_failed"}), 500
-    detail = None
-    for row in report.get("rows", []) or []:
-        if isinstance(row, dict) and not row.get("is_total"):
-            detail = row
-            break
-    numeric = {}
-    if detail:
-        for key, value in detail.items():
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                numeric[key] = value
-    return jsonify({
-        "period": "%04d-%02d" % (year, month),
-        "all_keys": sorted(detail.keys()) if detail else [],
-        "numeric_fields": numeric,
-    })
+    return jsonify({"path": str(PROV_PATH), "exists": PROV_PATH.exists(), "data": _read_prov()})
 
 
 @app.get("/narrative-health")
@@ -288,12 +331,11 @@ def narrative_health():
     user = _current_user()
     return jsonify({
         "template_exists": TEMPLATE.exists(),
-        "template_bytes": TEMPLATE.stat().st_size if TEMPLATE.exists() else 0,
         "config_loaded": bool(cfg.get("meetings")),
+        "editable_regions": cfg.get("editable_regions"),
         "meetings": cfg.get("order"),
-        "store_path": str(STORE.path),
-        "store_exists": STORE.path.exists(),
         "round_keys": STORE.list_keys(),
+        "provisional_periods": sorted(_read_prov().keys()),
         "my_scope": _my_scope(user) if user else None,
     })
 
