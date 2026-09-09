@@ -1,10 +1,12 @@
 """회의 자료 PPT 내려받기.
 
 표는 서버가 리포트 데이터로 직접 그린다. 캡처도 붙여넣기도 없다.
-문안은 화면이 만든다. 숫자 조립 규칙을 서버와 화면에 두 번 구현하지 않기 위해서다.
+문안은 화면이 만든다. 숫자 조립 규칙을 두 번 구현하지 않기 위해서다.
+
+문안은 짧게 간다. 사업분야별 숫자는 표가 이미 보여주므로 문장에서 뺀다.
+문단마다 크기를 지정한다. 지정하지 않으면 상자 기본값이 먹어 표를 덮는다.
 
 증감 표기는 ▲ 빨강 / ▼ 파랑 / - 회색으로 통일한다.
-화면이 아직 +, △ 로 찍는 자리는 여기서 바꿔 준다.
 
 주의: HTTP 헤더는 latin-1 만 담는다. 파일 이름에 한글을 그대로 넣으면 응답이 터진다.
 """
@@ -20,7 +22,7 @@ import narrative_table_cfg as tcfg
 from flask import Response, jsonify, request
 
 app = prev.app
-MARK = "mp-pptx-ui"
+MARK = "mp-pptx-ui2"
 
 COLOR = {"blue": builder.BLUE, "red": builder.RED, "black": builder.BLACK}
 
@@ -39,7 +41,6 @@ def _to_int(value):
 
 
 def _table_index(year, month, meeting):
-    """리포트를 (사업부, 지역, 구분) 단위로 모은다."""
     index = {}
     report = prev._build(year, month)
     for row in (report or {}).get("rows", []) or []:
@@ -49,7 +50,6 @@ def _table_index(year, month, meeting):
         if not (business and region and kind):
             continue
         rec = {f: _to_int(row.get(f)) for f in FIELDS}
-        # 잠정마감 기록이 상세 단위로는 없으므로 마감값을 그대로 쓴다.
         rec["prev_provisional"] = rec.get("prev_close")
         index[(business, region, kind)] = rec
 
@@ -80,15 +80,13 @@ def _frames(year, month, meeting):
     plan_cols = tcfg.columns(meeting, ctx, plan=True)
     rows_full = tbl.make_rows(index, full_cols)
     rows_plan = tbl.make_rows(index, plan_cols)
-    lay = tcfg.LAYOUT["full"]
-    lay_plan = tcfg.LAYOUT["plan"]
-    frames = {
+    lay, lay_plan = tcfg.LAYOUT["full"], tcfg.LAYOUT["plan"]
+    return {
         "close": tbl.build_table(rows_full, full_cols, lay["x"], lay["y"], lay["w"], lay["h"], 91),
         "fcst": tbl.build_table(rows_full, full_cols, lay["x"], lay["y"], lay["w"], lay["h"], 92),
         "plan": tbl.build_table(rows_plan, plan_cols, lay_plan["x"], lay_plan["y"],
                                 lay_plan["w"], lay_plan["h"], 93),
-    }
-    return frames, len(index)
+    }, len(index)
 
 
 @app.get("/narrative-pptx-health")
@@ -97,28 +95,26 @@ def narrative_pptx_health():
         return jsonify({"error": "unauthorized"}), 401
     try:
         frames, n = _frames(2026, 9, "r1")
-        table_ok = bool(frames)
     except Exception as exc:
         return jsonify({"table_error": type(exc).__name__ + ": " + str(exc)[:200]}), 500
     return jsonify({
         "template_exists": builder.TEMPLATE.exists(),
         "template_bytes": builder.TEMPLATE.stat().st_size if builder.TEMPLATE.exists() else 0,
-        "table_ok": table_ok,
+        "table_ok": bool(frames),
         "table_cells": n,
     })
 
 
 @app.post("/narrative-pptx")
 def narrative_pptx():
-    user = prev._current_user()
-    if not user:
+    if not prev._current_user():
         return jsonify({"error": "unauthorized"}), 401
     payload = request.get_json(silent=True) or {}
 
     blocks = {}
     for slot in ("close", "fcst", "plan_left", "plan_right"):
         paras = []
-        for item in (payload.get(slot) or [])[:60]:
+        for item in (payload.get(slot) or [])[:40]:
             if not isinstance(item, dict):
                 continue
             text = str(item.get("t") or "")
@@ -129,9 +125,14 @@ def narrative_pptx():
                 indent = int(item.get("i") or 0)
             except Exception:
                 indent = 0
-            paras.append(builder.para(text[:400],
+            try:
+                size = int(item.get("s") or builder.SIZE_BODY)
+            except Exception:
+                size = builder.SIZE_BODY
+            paras.append(builder.para(text[:300],
                                       color=COLOR.get(item.get("c"), builder.BLACK),
-                                      bold=bool(item.get("b")), indent=indent))
+                                      bold=bool(item.get("b")), indent=indent,
+                                      size=max(800, min(2000, size))))
         blocks[slot] = paras
 
     key = str(payload.get("key") or "")
@@ -154,14 +155,12 @@ def narrative_pptx():
 
     safe = re.sub(r'[^0-9A-Za-z_-]', '', key.replace(":", "_"))[:40] or "round"
     stamp = datetime.now().strftime("%m%d")
-    ascii_name = "meeting_%s_%s.pptx" % (safe, stamp)
-    korean_name = "실적회의_%s_%s.pptx" % (safe, stamp)
     return Response(
         data,
         mimetype="application/vnd.openxmlformats-officedocument.presentationml.presentation",
         headers={
-            "Content-Disposition": 'attachment; filename="%s"; filename*=UTF-8\'\'%s'
-                                   % (ascii_name, quote(korean_name, safe="")),
+            "Content-Disposition": 'attachment; filename="meeting_%s_%s.pptx"; filename*=UTF-8\'\'%s'
+                                   % (safe, stamp, quote("실적회의_%s_%s.pptx" % (safe, stamp), safe="")),
             "X-MedPark-PPT-Tables": ",".join(report.get("tables") or []),
         },
     )
@@ -175,15 +174,14 @@ SCRIPT = """
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
     else fn();
   }
-  // 증감 표기 통일: +12 → ▲12,  △12 → ▼12
   function arrow(s){
     if (!s) return s;
     return String(s).replace(/△/g, '▼').replace(/\\+/g, '▲');
   }
   function txt(id){ var e = $(id); return e ? arrow((e.textContent || '').trim()) : ''; }
-  function P(t, c, b, i){ return {t: t, c: c || 'black', b: !!b, i: i || 0}; }
+  // t 내용, c 색, b 굵게, i 들여쓰기, s 글자크기(100 = 1pt)
+  function P(t, c, b, i, s){ return {t: t, c: c || 'black', b: !!b, i: i || 0, s: s || 1200}; }
 
-  var BIZ = ['덴탈','메디컬','에스테틱'];
   var SCOPES = [['dom','국내'],['ovs','해외']];
 
   function colCount(pfx){
@@ -209,40 +207,27 @@ SCRIPT = """
   }
   function firstTok(s){ return (s || '').split(' ')[0]; }
 
+  // 사업분야별 숫자는 표가 보여주므로 문장에서 뺀다.
   function section(pfx, heading, subHeading){
-    var out = [], cur = curIdx(pfx), n = colCount(pfx);
+    var out = [], cur = curIdx(pfx);
     var curLabel = txt('th-' + pfx + cur);
     var baseLabel = cur >= 2 ? txt('th-' + pfx + (cur-1)) : '';
-    out.push(P(heading, 'black', true));
-    if (subHeading) out.push(P(subHeading, 'black', false));
+    out.push(P(heading, 'black', true, 0, 1400));
+    if (subHeading) out.push(P(subHeading, 'black', false, 0, 1200));
     var total = cellVal(pfx + '_tot_' + cur);
     var delta = txt(pfx + '_tot_d');
     var line = 'ㄱ. ' + curLabel + ' : ' + (total || '미입력');
     if (baseLabel && delta && delta !== '—') line += '      ' + baseLabel + ' 대비 ' + delta;
-    out.push(P(line, 'blue', true, 1));
+    out.push(P(line, 'blue', true, 1, 1400));
+    var segs = [];
     for (var s=0;s<SCOPES.length;s++){
       var sc = SCOPES[s];
       var sub = cellVal(pfx + '_' + sc[0] + '_sub_' + cur);
       if (!sub || sub === '—') continue;
       var sd = txt(pfx + '_' + sc[0] + '_sub_d');
-      var parts = [];
-      for (var b=0;b<BIZ.length;b++){
-        var v = cellVal(pfx + '_' + sc[0] + '_' + b + '_' + cur);
-        if (!v) continue;
-        var d = txt(pfx + '_' + sc[0] + '_' + b + '_d');
-        parts.push(BIZ[b] + ' ' + v + (d && d !== '—' ? '(' + firstTok(d) + ')' : ''));
-      }
-      out.push(P('- ' + sc[1] + ' : ' + sub + (sd && sd !== '—' ? ' (' + firstTok(sd) + ')' : ''), 'black', false, 2));
-      if (parts.length) out.push(P('  ' + parts.join('  /  '), 'black', false, 3));
+      segs.push(sc[1] + ' ' + sub + (sd && sd !== '—' ? ' (' + firstTok(sd) + ')' : ''));
     }
-    if (n >= 3){
-      var flow = [];
-      for (var j=1;j<=n;j++){
-        var v = cellVal(pfx + '_tot_' + j);
-        if (v && v !== '—') flow.push(txt('th-' + pfx + j) + ' ' + v);
-      }
-      if (flow.length >= 3) out.push(P('- 차수 흐름 : ' + flow.join(' ▶ '), 'blue', false, 2));
-    }
+    if (segs.length) out.push(P('- ' + segs.join('   /   '), 'black', false, 2, 1200));
     return out;
   }
 
@@ -253,19 +238,15 @@ SCRIPT = """
       var r = rows[i];
       var who = r.querySelector('.who');
       if (!who || !(who.value || '').trim()) continue;
-      var amt = r.querySelector('.amt');
-      var scope = r.querySelector('.scope');
-      var biz = r.querySelector('.biz');
-      var why = r.querySelector('.why');
+      var scope = r.querySelector('.scope'), biz = r.querySelector('.biz'), why = r.querySelector('.why');
       items.push('- ' + (scope ? scope.value : '') +
                  (biz && biz.value !== '전체' ? ' ' + biz.value : '') +
-                 ' ' + who.value.trim() +
-                 (amt && amt.value ? ' ' + amt.value : '') +
-                 ' : ' + (why ? why.value : ''));
+                 ' ' + who.value.trim() + ' : ' + (why ? why.value : ''));
     }
     if (!items.length) return out;
-    out.push(P(label, 'black', true, 1));
-    for (var k=0;k<items.length;k++) out.push(P(items[k], 'black', false, 2));
+    out.push(P(label, 'black', true, 1, 1200));
+    for (var k=0;k<items.length && k<6;k++) out.push(P(items[k], 'black', false, 2, 1100));
+    if (items.length > 6) out.push(P('- 외 ' + (items.length-6) + '건', 'black', false, 2, 1100));
     return out;
   }
 
@@ -275,7 +256,7 @@ SCRIPT = """
     for (var i=0;i<secs.length;i++){
       var h2 = secs[i].querySelector('h2');
       var title = h2 ? (h2.textContent || '').replace('담당·기한 필수','').trim() : '항목';
-      out.push(P('ㄴ. ' + title, 'blue', true, 1));
+      out.push(P('ㄴ. ' + title, 'blue', true, 1, 1400));
       var rows = secs[i].querySelectorAll('.lrow');
       var any = false;
       for (var k=0;k<rows.length;k++){
@@ -285,38 +266,36 @@ SCRIPT = """
           var v = (fields[f].value || '').trim();
           if (v && v !== '전체' && v !== '담당 선택') vals.push(v);
         }
-        if (vals.length >= 2){ out.push(P('- ' + vals.join(' / '), 'black', false, 2)); any = true; }
+        if (vals.length >= 2){ out.push(P('- ' + vals.join(' / '), 'black', false, 2, 1200)); any = true; }
       }
-      if (!any) out.push(P('- 입력된 항목이 없습니다', 'red', true, 2));
+      if (!any) out.push(P('- 입력된 항목이 없습니다', 'red', true, 2, 1200));
     }
     return out;
   }
 
   function buildBlocks(){
-    var closeH = txt('h-close'), fcstH = txt('h-fcst');
     var meetSel = $('meeting');
     var meetLabel = (meetSel && meetSel.options[meetSel.selectedIndex])
       ? meetSel.options[meetSel.selectedIndex].text : '';
-    var close = section('c', '1) 매출', '(1) ' + closeH + ' 요약  [' + meetLabel + ']');
+    var close = section('c', '1) 매출', '(1) ' + txt('h-close') + ' 요약  [' + meetLabel + ']');
     close = close.concat(factorLines('c_factors', 'ㄴ. 변동 요인'));
     var note = $('note_close');
-    if (note && (note.value || '').trim()) close.push(P('* ' + note.value.trim(), 'red', true, 1));
+    if (note && (note.value || '').trim()) close.push(P('* ' + note.value.trim(), 'red', true, 1, 1200));
 
-    var fcst = section('f', '1) 매출', '(2) ' + fcstH + ' 요약');
+    var fcst = section('f', '1) 매출', '(2) ' + txt('h-fcst') + ' 요약');
     fcst = fcst.concat(factorLines('f_factors', 'ㄴ. 변동 요인'));
 
-    var left = [P('1) 매출', 'black', true), P('(3) 매출 분석', 'black', false)];
+    var left = [P('1) 매출', 'black', true, 0, 1400), P('(3) 매출 분석', 'black', false, 0, 1200)];
     var headLine = txt('out_head');
     if (headLine && headLine.indexOf('숫자를') < 0){
       var segs = headLine.split('|');
       for (var i=0;i<segs.length;i++){
-        if (segs[i].trim()) left.push(P('- ' + segs[i].trim(), 'blue', true, 1));
+        if (segs[i].trim()) left.push(P('- ' + segs[i].trim(), 'blue', true, 1, 1200));
       }
     }
     return {close: close, fcst: fcst, plan_left: left, plan_right: listLines()};
   }
 
-  // 화면의 증감 칸도 ▲/▼ 로 보이게 한다.
   function fixDeltas(root){
     var cells = (root || document).querySelectorAll('td.delta');
     for (var i=0;i<cells.length;i++){
