@@ -3,14 +3,14 @@
 표는 서버가 리포트 데이터로 직접 그린다. 캡처도 붙여넣기도 없다.
 문안은 화면이 만든다. 숫자 조립 규칙을 두 번 구현하지 않기 위해서다.
 
-25년 누계는 narrative_history 의 월별 값을 마감월까지 누적해서 쓴다.
-김태현 님 시트의 '2025년 누계실적' 열을 그대로 쓰지 않는 이유:
-그 열은 1~6월 기준인데 2026년 누계는 1~7월 기준이라 구간이 어긋난다.
-(2026 94.83억 vs 2025 70.20억 → +35.1% 로 보이지만, 같은 구간이면 +18% 대)
-여기서는 회의 대상월에 맞춰 두 해를 같은 구간으로 누적한다.
+배치
+  왼쪽  요약(합계·국내/해외)
+  오른쪽 변동 요인·특이사항
+  아래  표
+요인이 늘어도 오른쪽으로만 쌓이므로 표를 덮지 않는다.
 
-25년 자료에는 기존/신규 구분이 없다. 신규 구분은 26년 계획관리용이므로
-25년 값은 전액 기존 행에 넣고 신규 행은 0으로 둔다.
+25년 누계는 리포트 저장소에 넣어 뒀으므로 리포트 값을 그대로 쓴다.
+표와 리포트 화면이 같은 숫자를 본다.
 
 증감 표기는 ▲ 빨강 / ▼ 파랑 / - 회색으로 통일한다.
 
@@ -27,17 +27,13 @@ import narrative_table as tbl
 import narrative_table_cfg as tcfg
 from flask import Response, jsonify, request
 
-try:
-    import narrative_history as hist
-except Exception:
-    hist = None
-
 app = prev.app
-MARK = "mp-pptx-ui3"
+MARK = "mp-pptx-ui4"
 
 COLOR = {"blue": builder.BLUE, "red": builder.RED, "black": builder.BLACK}
+SLOTS = ("close", "close_right", "fcst", "fcst_right", "plan_left", "plan_right")
 
-FIELDS = ("ytd", "prev_preclose", "prev_close",
+FIELDS = ("ytd", "prev_ytd", "prev_preclose", "prev_close",
           "first", "second", "third_confirmed", "third_forecast",
           "next_first", "second_half")
 
@@ -52,7 +48,6 @@ def _to_int(value):
 
 
 def _closing_month(month, meeting):
-    """이 회의에서 마감을 다루는 달. 누계 비교 구간의 끝이다."""
     if meeting == "pre":
         return month
     return 12 if month == 1 else month - 1
@@ -70,18 +65,6 @@ def _table_index(year, month, meeting):
         rec = {f: _to_int(row.get(f)) for f in FIELDS}
         rec["prev_provisional"] = rec.get("prev_close")
         index[(business, region, kind)] = rec
-
-    # 25년 누계: 마감월까지 누적. 기존 행에만 넣는다.
-    through = _closing_month(month, meeting)
-    if hist is not None:
-        for (business, region, kind), rec in index.items():
-            if kind != "기존":
-                rec["prev_ytd"] = 0
-                continue
-            try:
-                rec["prev_ytd"] = hist.ytd_2025(business, region, through)
-            except Exception:
-                rec["prev_ytd"] = None
 
     if meeting == "pre":
         ny, nm = (year + 1, 1) if month == 12 else (year, month + 1)
@@ -133,7 +116,6 @@ def narrative_pptx_health():
         return jsonify({"table_error": type(exc).__name__ + ": " + str(exc)[:200]}), 500
     return jsonify({
         "template_exists": builder.TEMPLATE.exists(),
-        "history_loaded": hist is not None,
         "closing_month": _closing_month(9, "r1"),
         "ytd_2026_억": round(cur / 1e8, 2),
         "ytd_2025_억": round(old / 1e8, 2),
@@ -150,7 +132,7 @@ def narrative_pptx():
     payload = request.get_json(silent=True) or {}
 
     blocks = {}
-    for slot in ("close", "fcst", "plan_left", "plan_right"):
+    for slot in SLOTS:
         paras = []
         for item in (payload.get(slot) or [])[:40]:
             if not isinstance(item, dict):
@@ -200,6 +182,7 @@ def narrative_pptx():
             "Content-Disposition": 'attachment; filename="meeting_%s_%s.pptx"; filename*=UTF-8\'\'%s'
                                    % (safe, stamp, quote("실적회의_%s_%s.pptx" % (safe, stamp), safe="")),
             "X-MedPark-PPT-Tables": ",".join(report.get("tables") or []),
+            "X-MedPark-PPT-Boxes": ",".join(report.get("boxes") or []),
         },
     )
 
@@ -267,7 +250,8 @@ SCRIPT = """
     return out;
   }
 
-  function factorLines(target, label){
+  // 오른쪽 상자로 갈 변동 요인
+  function factorBox(target, label){
     var out = [], items = [];
     var rows = document.querySelectorAll('#' + target + ' .lrow');
     for (var i=0;i<rows.length;i++){
@@ -280,9 +264,9 @@ SCRIPT = """
                  ' ' + who.value.trim() + ' : ' + (why ? why.value : ''));
     }
     if (!items.length) return out;
-    out.push(P(label, 'black', true, 1, 1200));
-    for (var k=0;k<items.length && k<6;k++) out.push(P(items[k], 'black', false, 2, 1100));
-    if (items.length > 6) out.push(P('- 외 ' + (items.length-6) + '건', 'black', false, 2, 1100));
+    out.push(P(label, 'black', true, 0, 1200));
+    for (var k=0;k<items.length && k<12;k++) out.push(P(items[k], 'black', false, 1, 1100));
+    if (items.length > 12) out.push(P('- 외 ' + (items.length-12) + '건', 'black', false, 1, 1100));
     return out;
   }
 
@@ -313,13 +297,16 @@ SCRIPT = """
     var meetSel = $('meeting');
     var meetLabel = (meetSel && meetSel.options[meetSel.selectedIndex])
       ? meetSel.options[meetSel.selectedIndex].text : '';
+
     var close = section('c', '1) 매출', '(1) ' + txt('h-close') + ' 요약  [' + meetLabel + ']');
-    close = close.concat(factorLines('c_factors', 'ㄴ. 변동 요인'));
+    var closeRight = factorBox('c_factors', 'ㄴ. 변동 요인');
     var note = $('note_close');
-    if (note && (note.value || '').trim()) close.push(P('* ' + note.value.trim(), 'red', true, 1, 1200));
+    if (note && (note.value || '').trim()){
+      closeRight.push(P('* ' + note.value.trim(), 'red', true, 0, 1200));
+    }
 
     var fcst = section('f', '1) 매출', '(2) ' + txt('h-fcst') + ' 요약');
-    fcst = fcst.concat(factorLines('f_factors', 'ㄴ. 변동 요인'));
+    var fcstRight = factorBox('f_factors', 'ㄴ. 변동 요인');
 
     var left = [P('1) 매출', 'black', true, 0, 1400), P('(3) 매출 분석', 'black', false, 0, 1200)];
     var headLine = txt('out_head');
@@ -329,7 +316,9 @@ SCRIPT = """
         if (segs[i].trim()) left.push(P('- ' + segs[i].trim(), 'blue', true, 1, 1200));
       }
     }
-    return {close: close, fcst: fcst, plan_left: left, plan_right: listLines()};
+    return {close: close, close_right: closeRight,
+            fcst: fcst, fcst_right: fcstRight,
+            plan_left: left, plan_right: listLines()};
   }
 
   function fixDeltas(root){
@@ -381,7 +370,7 @@ SCRIPT = """
         a.href = url; a.download = body.key.replace(':', '_') + '_회의자료.pptx';
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(function(){ URL.revokeObjectURL(url); }, 3000);
-        info('내려받았습니다 (' + Math.round(blob.size/1024) + 'KB). 표까지 들어 있습니다.');
+        info('내려받았습니다 (' + Math.round(blob.size/1024) + 'KB).');
         btn.disabled = false;
       }).catch(function(e){
         clearTimeout(timer);
