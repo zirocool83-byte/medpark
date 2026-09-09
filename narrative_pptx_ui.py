@@ -4,10 +4,15 @@
 회사 장표 3장으로 만들어 내려준다.
 
 문단은 화면에서 만든다. 서버가 숫자 조립 규칙을 두 번 구현하지 않기 위해서다.
+
+주의: HTTP 헤더는 latin-1 만 담을 수 있다.
+      파일 이름에 한글을 그대로 넣으면 응답을 내보내는 순간 터진다.
+      ASCII 이름을 filename 으로 주고, 한글 이름은 RFC 5987 방식으로 인코딩해 붙인다.
 """
 
 import re
 from datetime import datetime
+from urllib.parse import quote
 
 import narrative_page as prev
 import narrative_ppt as builder
@@ -46,11 +51,15 @@ def narrative_pptx():
             if not text.strip():
                 paras.append(builder.blank())
                 continue
+            try:
+                indent = int(item.get("i") or 0)
+            except Exception:
+                indent = 0
             paras.append(builder.para(
                 text[:400],
                 color=COLOR.get(item.get("c"), builder.BLACK),
                 bold=bool(item.get("b")),
-                indent=int(item.get("i") or 0),
+                indent=indent,
             ))
         blocks[slot] = paras
     if not any(blocks.values()):
@@ -62,15 +71,20 @@ def narrative_pptx():
     except Exception as exc:
         return jsonify({"error": type(exc).__name__ + ": " + str(exc)[:200]}), 500
 
-    key = re.sub(r'[^0-9A-Za-z:_-]', '', str(payload.get("key") or "round"))[:40].replace(":", "_")
-    name = "실적회의_%s_%s.pptx" % (key, datetime.now().strftime("%m%d"))
+    key = re.sub(r'[^0-9A-Za-z_-]', '', str(payload.get("key") or "round").replace(":", "_"))[:40]
+    stamp = datetime.now().strftime("%m%d")
+    ascii_name = "meeting_%s_%s.pptx" % (key or "round", stamp)
+    korean_name = "실적회의_%s_%s.pptx" % (key or "round", stamp)
+    disposition = 'attachment; filename="%s"; filename*=UTF-8\'\'%s' % (
+        ascii_name, quote(korean_name, safe=""))
+
     return Response(
         data,
         mimetype="application/vnd.openxmlformats-officedocument.presentationml.presentation",
         headers={
-            "Content-Disposition": "attachment; filename*=UTF-8''" + name.replace(" ", "_"),
-            "X-MedPark-PPT-Replaced": ",".join(report.get("replaced") or []),
-            "X-MedPark-PPT-Missing": ",".join(report.get("missing") or []),
+            "Content-Disposition": disposition,
+            "X-MedPark-PPT-Replaced": ",".join(report.get("replaced") or []).encode("ascii", "replace").decode("ascii"),
+            "X-MedPark-PPT-Missing": ",".join(report.get("missing") or []).encode("ascii", "replace").decode("ascii"),
         },
     )
 
@@ -100,9 +114,9 @@ SCRIPT = """
   function curIdx(pfx){
     for (var j=1;j<=3;j++){
       var th = $('th-' + pfx + j);
-      if (th && th.className.indexOf('cur') >= 0) return j;
+      if (th && (th.className || '').indexOf('cur') >= 0) return j;
     }
-    return colCount(pfx);
+    return colCount(pfx) || 2;
   }
   function cellVal(id){
     var e = $(id);
@@ -110,8 +124,8 @@ SCRIPT = """
     if (e.tagName === 'INPUT') return (e.value || '').trim();
     return (e.textContent || '').trim();
   }
+  function firstTok(s){ return (s || '').split(' ')[0]; }
 
-  // 섹션 하나를 개조식 문단으로
   function section(pfx, heading, subHeading){
     var out = [], cur = curIdx(pfx), n = colCount(pfx);
     var curLabel = txt('th-' + pfx + cur);
@@ -120,25 +134,24 @@ SCRIPT = """
     if (subHeading) out.push(P(subHeading, 'black', false));
     var total = cellVal(pfx + '_tot_' + cur);
     var delta = txt(pfx + '_tot_d');
-    var line = 'ㄱ. ' + curLabel + ' : ' + total;
+    var line = 'ㄱ. ' + curLabel + ' : ' + (total || '미입력');
     if (baseLabel && delta && delta !== '—') line += '      ' + baseLabel + ' 대비 ' + delta;
     out.push(P(line, 'blue', true, 1));
-    SCOPES.forEach(function(sc){
+    for (var s=0;s<SCOPES.length;s++){
+      var sc = SCOPES[s];
       var sub = cellVal(pfx + '_' + sc[0] + '_sub_' + cur);
-      if (!sub || sub === '—') return;
+      if (!sub || sub === '—') continue;
       var sd = txt(pfx + '_' + sc[0] + '_sub_d');
       var parts = [];
       for (var b=0;b<BIZ.length;b++){
         var v = cellVal(pfx + '_' + sc[0] + '_' + b + '_' + cur);
         if (!v) continue;
         var d = txt(pfx + '_' + sc[0] + '_' + b + '_d');
-        parts.push(BIZ[b] + ' ' + v + (d && d !== '—' ? '(' + d.split(' ')[0] + ')' : ''));
+        parts.push(BIZ[b] + ' ' + v + (d && d !== '—' ? '(' + firstTok(d) + ')' : ''));
       }
-      var s = '- ' + sc[1] + ' : ' + sub + (sd && sd !== '—' ? ' (' + sd.split(' ')[0] + ')' : '');
-      out.push(P(s, 'black', false, 2));
+      out.push(P('- ' + sc[1] + ' : ' + sub + (sd && sd !== '—' ? ' (' + firstTok(sd) + ')' : ''), 'black', false, 2));
       if (parts.length) out.push(P('  ' + parts.join('  /  '), 'black', false, 3));
-    });
-    // 차수 흐름
+    }
     if (n >= 3){
       var flow = [];
       for (var j=1;j<=n;j++){
@@ -151,21 +164,25 @@ SCRIPT = """
   }
 
   function factorLines(target, label){
-    var out = [];
+    var out = [], items = [];
     var rows = document.querySelectorAll('#' + target + ' .lrow');
-    var items = [];
     for (var i=0;i<rows.length;i++){
       var r = rows[i];
-      var who = r.querySelector('.who'), amt = r.querySelector('.amt');
+      var who = r.querySelector('.who');
       if (!who || !(who.value || '').trim()) continue;
-      var scope = r.querySelector('.scope'), biz = r.querySelector('.biz'), why = r.querySelector('.why');
-      items.push('- ' + scope.value + (biz && biz.value !== '전체' ? ' ' + biz.value : '') +
-                 ' ' + who.value.trim() + (amt && amt.value ? ' ' + amt.value : '') +
+      var amt = r.querySelector('.amt');
+      var scope = r.querySelector('.scope');
+      var biz = r.querySelector('.biz');
+      var why = r.querySelector('.why');
+      items.push('- ' + (scope ? scope.value : '') +
+                 (biz && biz.value !== '전체' ? ' ' + biz.value : '') +
+                 ' ' + who.value.trim() +
+                 (amt && amt.value ? ' ' + amt.value : '') +
                  ' : ' + (why ? why.value : ''));
     }
     if (!items.length) return out;
     out.push(P(label, 'black', true, 1));
-    items.forEach(function(s){ out.push(P(s, 'black', false, 2)); });
+    for (var k=0;k<items.length;k++) out.push(P(items[k], 'black', false, 2));
     return out;
   }
 
@@ -195,25 +212,25 @@ SCRIPT = """
   function buildBlocks(){
     var closeH = txt('h-close'), fcstH = txt('h-fcst');
     var meetSel = $('meeting');
-    var meetLabel = meetSel ? meetSel.options[meetSel.selectedIndex].text : '';
+    var meetLabel = (meetSel && meetSel.options[meetSel.selectedIndex])
+      ? meetSel.options[meetSel.selectedIndex].text : '';
     var close = section('c', '1) 매출', '(1) ' + closeH + ' 요약  [' + meetLabel + ']');
     close = close.concat(factorLines('c_factors', 'ㄴ. 변동 요인'));
     var note = $('note_close');
-    if (note && (note.value || '').trim()){
-      close.push(P('* ' + note.value.trim(), 'red', true, 1));
-    }
+    if (note && (note.value || '').trim()) close.push(P('* ' + note.value.trim(), 'red', true, 1));
+
     var fcst = section('f', '1) 매출', '(2) ' + fcstH + ' 요약');
     fcst = fcst.concat(factorLines('f_factors', 'ㄴ. 변동 요인'));
 
     var left = [P('1) 매출', 'black', true), P('(3) 매출 분석', 'black', false)];
     var headLine = txt('out_head');
     if (headLine && headLine.indexOf('숫자를') < 0){
-      headLine.split('|').forEach(function(s){
-        if (s.trim()) left.push(P('- ' + s.trim(), 'blue', true, 1));
-      });
+      var segs = headLine.split('|');
+      for (var i=0;i<segs.length;i++){
+        if (segs[i].trim()) left.push(P('- ' + segs[i].trim(), 'blue', true, 1));
+      }
     }
-    var right = listLines();
-    return {close: close, fcst: fcst, plan_left: left, plan_right: right};
+    return {close: close, fcst: fcst, plan_left: left, plan_right: listLines()};
   }
 
   ready(function(){
@@ -225,25 +242,46 @@ SCRIPT = """
     btn.className = 'primary';
     var msg = document.createElement('span');
     msg.style.cssText = 'font-size:15px;color:#5C6B7A';
+    function fail(m){ msg.style.color = '#8C2018'; msg.textContent = m; btn.disabled = false; }
+    function info(m){ msg.style.color = '#5C6B7A'; msg.textContent = m; }
+
     btn.addEventListener('click', function(){
-      msg.textContent = '만드는 중…';
-      var body = buildBlocks();
-      body.key = ($('year').value + '-' + ('0'+$('month').value).slice(-2) + ':' + $('meeting').value);
+      btn.disabled = true;
+      info('문단 만드는 중…');
+      var body;
+      try {
+        body = buildBlocks();
+        body.key = $('year').value + '-' + ('0' + $('month').value).slice(-2) + ':' + $('meeting').value;
+      } catch (e) {
+        fail('문단 생성 실패: ' + (e && e.message ? e.message : e));
+        return;
+      }
+      info('파일 만드는 중…');
+      var timer = setTimeout(function(){ fail('응답이 없습니다. 다시 눌러주십시오.'); }, 20000);
       fetch('/narrative-pptx', {
-        method:'POST', credentials:'same-origin',
-        headers:{'Content-Type':'application/json'},
+        method: 'POST', credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(body)
       }).then(function(r){
-        if (!r.ok) return r.json().then(function(j){ throw new Error(j.error || r.status); });
+        if (!r.ok) {
+          return r.text().then(function(t){ throw new Error('HTTP ' + r.status + ' ' + t.slice(0,160)); });
+        }
         return r.blob();
       }).then(function(blob){
+        clearTimeout(timer);
+        if (!blob || blob.size < 1000) throw new Error('빈 파일을 받았습니다');
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');
-        a.href = url; a.download = body.key.replace(':','_') + '_회의자료.pptx';
+        a.href = url;
+        a.download = body.key.replace(':', '_') + '_회의자료.pptx';
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(function(){ URL.revokeObjectURL(url); }, 3000);
-        msg.textContent = '내려받았습니다. 표 자리에 엑셀 캡처를 붙이면 완성입니다.';
-      }).catch(function(e){ msg.textContent = '실패: ' + e.message; });
+        info('내려받았습니다 (' + Math.round(blob.size/1024) + 'KB). 표 자리에 엑셀 캡처를 붙이면 완성입니다.');
+        btn.disabled = false;
+      }).catch(function(e){
+        clearTimeout(timer);
+        fail('실패: ' + (e && e.message ? e.message : e));
+      });
     });
     bar.appendChild(btn); bar.appendChild(msg);
   });
