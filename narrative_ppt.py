@@ -3,12 +3,13 @@
 narrative_template.pptx 는 실제 결산회의 장표에서 실적 슬라이드 3장과
 마스터·레이아웃·테마만 남기고 엑셀 캡처를 제거한 것이다.
 본문 텍스트 상자의 문단을 갈아끼우고, 비워둔 표 자리에 네이티브 표를 넣는다.
-배경·머리·폰트·색·슬라이드 번호는 원본 그대로 남는다.
+
+문단 크기를 명시하지 않으면 상자 기본값이 먹어 원본보다 커진다.
+표를 덮지 않도록 크기를 지정해서 넣는다.
 
 주의 1: txBody 는 <a:bodyPr>...</a:bodyPr><a:lstStyle/> 다음에 문단이 온다.
         bodyPr 이 자식(<a:spAutoFit/>)을 가질 수 있어서 여는 태그만 잘라내면
         XML 이 깨지고, 파워포인트는 오류 없이 그 상자를 통째로 무시한다.
-        (내용은 파일 안에 있는데 화면에는 아무것도 안 보이는 상태가 된다.)
 
 주의 2: 이 서버에는 Flask 와 gunicorn 만 설치돼 있다.
         외부 라이브러리를 쓰면 모듈 로드가 통째로 실패해 기능이 화면에서 사라진다.
@@ -30,6 +31,10 @@ BLUE = "0000FF"
 RED = "FF0000"
 BLACK = "000000"
 
+SIZE_TITLE = 1400
+SIZE_BODY = 1200
+SIZE_SMALL = 1100
+
 SHADOW = (
     '<a:effectLst><a:outerShdw blurRad="38100" dist="38100" dir="2700000" algn="tl">'
     '<a:srgbClr val="000000"><a:alpha val="43137"/></a:srgbClr></a:outerShdw></a:effectLst>'
@@ -48,10 +53,11 @@ def esc(text):
             .replace(">", "&gt;").replace('"', "&quot;"))
 
 
-def para(text, color=BLACK, bold=False, indent=0):
+def para(text, color=BLACK, bold=False, indent=0, size=SIZE_BODY):
     pad = "  " * max(0, int(indent))
     body = esc(pad + str(text))
-    rpr = '<a:rPr lang="ko-KR" altLang="en-US"%s dirty="0">' % (' b="1"' if bold else "")
+    rpr = '<a:rPr lang="ko-KR" altLang="en-US" sz="%d"%s dirty="0">' % (
+        int(size), ' b="1"' if bold else "")
     rpr += '<a:solidFill><a:srgbClr val="%s"/></a:solidFill>' % color
     if bold:
         rpr += SHADOW
@@ -59,8 +65,8 @@ def para(text, color=BLACK, bold=False, indent=0):
     return "<a:p><a:r>" + rpr + "<a:t>" + body + "</a:t></a:r></a:p>"
 
 
-def blank():
-    return '<a:p><a:endParaRPr lang="ko-KR" altLang="en-US" dirty="0"/></a:p>'
+def blank(size=SIZE_SMALL):
+    return '<a:p><a:endParaRPr lang="ko-KR" altLang="en-US" sz="%d" dirty="0"/></a:p>' % int(size)
 
 
 def _replace_txbody(slide_xml, shape_name, paragraphs):
@@ -98,9 +104,6 @@ def _insert_frame(slide_xml, frame_xml):
 
 
 def build(blocks, frames=None):
-    """blocks: {"close":[문단],"fcst":[...],"plan_left":[...],"plan_right":[...]}
-       frames: {"close":표XML, "fcst":표XML, "plan":표XML}
-    """
     if not TEMPLATE.exists():
         raise FileNotFoundError("narrative_template.pptx 가 없습니다")
 
@@ -131,7 +134,6 @@ def build(blocks, frames=None):
                 if frame:
                     xml = _insert_frame(xml, frame)
                     report["tables"].append(item.filename.split("/")[-1])
-                # 깨진 XML 은 조용히 무시되므로 반드시 여기서 걸러낸다.
                 ElementTree.fromstring(xml)
                 report["checked"].append(item.filename.split("/")[-1])
                 data = xml.encode("utf-8")
