@@ -23,8 +23,16 @@ TEMPLATE = Path(__file__).with_name("narrative.html")
 LINK_ID = "mp-narrative-link"
 REPORT_PATHS = ("/", "/performance-report")
 PERIOD_RE = re.compile(r"^(\d{4})-(\d{2})$")
-SEED_FIELDS = ("first", "second", "third_forecast", "third_confirmed", "close", "prev_close")
 MAX_PERIODS = 6
+
+# 리포트 행에서 실어 나르는 숫자 필드. narrative_config.py의 field_of가 여기서 고른다.
+SEED_FIELDS = (
+    "first", "second",
+    "third_confirmed", "third_forecast",
+    "close", "prev_close",
+    "prev_first", "prev_second", "prev_third_forecast", "prev_provisional",
+    "provisional", "provisional_close", "pre_close", "next_first",
+)
 
 FALLBACK_CONFIG = {
     "order": ["pre", "r1", "r2"],
@@ -71,11 +79,7 @@ def _config():
 
 
 def _period_rows(year, month):
-    """해당 월의 지역·사업분야별 값을 만든다.
-
-    형태: {"국내": {"덴탈": {"first":..,"second":..,"close":..}, ...}, "해외": {...}}
-    신규·기존은 합친다.
-    """
+    """해당 월의 지역·사업분야별 값. 신규·기존은 합친다."""
     try:
         report = live._build_report(year, month)
     except Exception:
@@ -87,7 +91,7 @@ def _period_rows(year, month):
         region, business = row.get("region"), row.get("business")
         if not region or not business:
             continue
-        bucket = out.setdefault(region, {}).setdefault(business, {f: None for f in SEED_FIELDS})
+        bucket = out.setdefault(region, {}).setdefault(business, {})
         for field in SEED_FIELDS:
             value = row.get(field)
             if value is None:
@@ -96,7 +100,7 @@ def _period_rows(year, month):
                 value = int(round(float(value)))
             except Exception:
                 continue
-            bucket[field] = value if bucket[field] is None else bucket[field] + value
+            bucket[field] = value if bucket.get(field) is None else bucket[field] + value
     return out
 
 
@@ -118,7 +122,7 @@ def narrative_page():
     html = html.replace("__CONFIG_JSON__", json.dumps(_config(), ensure_ascii=False))
     resp = make_response(html)
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
-    resp.headers["X-MedPark-Narrative"] = "narrative-4.0"
+    resp.headers["X-MedPark-Narrative"] = "narrative-4.1"
     return resp
 
 
@@ -143,6 +147,42 @@ def narrative_data():
     return jsonify({"data": data, "invalid": bad})
 
 
+@app.get("/narrative-fields")
+def narrative_fields():
+    """리포트 행이 실제로 어떤 필드를 들고 있는지 확인용.
+
+    가마감처럼 화면에는 있는데 필드명을 모르는 열을 매핑할 때 쓴다.
+    """
+    if not _require_user():
+        return jsonify({"error": "unauthorized"}), 401
+    try:
+        year = int(request.args.get("year", 2026))
+        month = int(request.args.get("month", 9))
+    except Exception:
+        year, month = 2026, 9
+    try:
+        report = live._build_report(year, month)
+    except Exception as exc:
+        return jsonify({"error": type(exc).__name__ + ": " + str(exc)[:200]}), 500
+    detail = None
+    for row in report.get("rows", []) or []:
+        if isinstance(row, dict) and not row.get("is_total"):
+            detail = row
+            break
+    numeric = {}
+    if detail:
+        for k, v in detail.items():
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                numeric[k] = v
+    return jsonify({
+        "period": "%04d-%02d" % (year, month),
+        "row_identity": {k: detail.get(k) for k in ("business", "region", "kind")} if detail else None,
+        "all_keys": sorted(detail.keys()) if detail else [],
+        "numeric_fields": numeric,
+        "report_top_keys": sorted([k for k in report.keys() if k != "rows"]),
+    })
+
+
 @app.get("/narrative-health")
 def narrative_health():
     sample = _period_rows(2026, 8)
@@ -155,6 +195,7 @@ def narrative_health():
         "template_bytes": TEMPLATE.stat().st_size if TEMPLATE.exists() else 0,
         "config_source": "narrative_config.py" if cfg is not FALLBACK_CONFIG else "fallback",
         "meetings": cfg.get("order"),
+        "field_of": cfg.get("field_of"),
         "sample_period": "2026-08",
         "sample_shape": shape,
         "sample": sample,
