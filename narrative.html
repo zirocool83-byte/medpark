@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>실적회의 문안 생성기</title>
+<style>
+  :root{
+    --bg:#EEF1F4; --surface:#FFFFFF; --ink:#16202B; --muted:#5C6B7A;
+    --rule:#C9D2DA; --up:#B32B24; --down:#1F5FA8; --field:#F6F8FA; --focus:#1F5FA8;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","맑은 고딕",sans-serif;
+    font-size:18px;line-height:1.6;-webkit-text-size-adjust:100%}
+  .wrap{max-width:1060px;margin:0 auto;padding:28px 20px 80px}
+
+  header.top{display:flex;flex-wrap:wrap;gap:18px 28px;align-items:flex-end;
+    padding-bottom:20px;border-bottom:2px solid var(--ink);margin-bottom:14px}
+  header.top h1{font-size:30px;font-weight:800;margin:0;letter-spacing:-0.02em}
+  header.top p.sub{margin:6px 0 0;font-size:16px;color:var(--muted)}
+  .ctrls{display:flex;flex-wrap:wrap;gap:12px}
+  .ctrl{display:flex;flex-direction:column;gap:5px}
+  .ctrl span{font-size:14px;color:var(--muted)}
+  select,input{font-family:inherit;font-size:18px;color:var(--ink);background:var(--field);
+    border:1px solid var(--rule);border-radius:4px;padding:9px 11px;min-height:44px}
+  select:focus,input:focus{outline:3px solid rgba(31,95,168,.35);outline-offset:1px;border-color:var(--focus)}
+
+  .cycle{background:var(--surface);border:1px solid var(--rule);border-radius:6px;
+    padding:16px 20px;margin-bottom:26px;font-size:16px;color:var(--muted)}
+  .cycle b{color:var(--ink)}
+  .cycle .now{color:var(--ink);font-weight:700}
+
+  section{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:24px;margin-bottom:26px}
+  section > h2{font-size:22px;margin:0 0 4px;font-weight:700;letter-spacing:-0.01em}
+  section > p.hint{margin:0 0 20px;font-size:15px;color:var(--muted)}
+
+  table.grid{width:100%;border-collapse:collapse;margin-bottom:14px}
+  table.grid th,table.grid td{padding:10px 7px;text-align:right;border-bottom:1px solid var(--rule);vertical-align:middle}
+  table.grid th{font-size:15px;color:var(--muted);font-weight:600}
+  table.grid th:first-child,table.grid td:first-child{text-align:left;white-space:nowrap}
+  table.grid input{width:100%;text-align:right;font-variant-numeric:tabular-nums}
+  table.grid tr.total td,table.grid tr.total th{font-weight:700;border-bottom:2px solid var(--ink);background:#F9FBFC}
+  th.cur,td.cur{background:#EFF4F8}
+  td.delta{font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap;font-size:17px}
+  .up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--muted)}
+  .tag{display:inline-block;font-size:13px;font-weight:600;padding:2px 7px;border-radius:3px;
+    background:#E7EDF2;color:var(--muted);margin-left:8px;vertical-align:middle}
+  .tag.manual{background:#FBEEC9;color:#7A5A10}
+  .tag.auto{background:#DCEBDD;color:#2C5E33}
+
+  .prog{font-size:16px;color:var(--muted);padding:11px 14px;background:#F5F8FA;
+    border:1px solid var(--rule);border-radius:4px;margin-bottom:20px;font-variant-numeric:tabular-nums}
+  .prog b{color:var(--ink)}
+  .prog.hide{display:none}
+
+  .tolbox{display:none;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px;
+    padding:14px 16px;background:#F5F8FA;border:1px solid var(--rule);border-radius:5px}
+  .tolbox.on{display:flex}
+  .tolbox label{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--muted)}
+  .tolbox input{width:88px;text-align:right}
+  .verdict{font-size:17px;font-weight:700;padding:9px 13px;border-radius:4px;background:#E7EDF2;color:var(--muted)}
+  .verdict.ok{background:#E2F0E5;color:#2C5E33}
+  .verdict.warn{background:#FAE8E6;color:#8C2018}
+
+  .factors h3{font-size:17px;margin:0 0 10px;font-weight:700}
+  .frow{display:grid;grid-template-columns:104px 1fr 168px 176px 44px;gap:8px;margin-bottom:8px;align-items:center}
+  .frow input,.frow select{min-height:44px;font-size:17px}
+  .frow input.amt{text-align:right;font-variant-numeric:tabular-nums}
+  button.x{min-height:44px;border:1px solid var(--rule);background:var(--field);color:var(--muted);
+    border-radius:4px;font-size:19px;cursor:pointer;line-height:1}
+  button.x:hover{background:#ECEFF2;color:var(--ink)}
+  button.add{margin-top:6px;border:1px dashed var(--rule);background:transparent;color:var(--muted);
+    border-radius:4px;padding:11px 16px;font-size:16px;font-family:inherit;cursor:pointer;min-height:44px}
+  button.add:hover{border-color:var(--focus);color:var(--focus)}
+
+  .out{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:28px 26px}
+  .out h2{font-size:22px;margin:0 0 20px;font-weight:700}
+  .block{border-left:3px solid var(--ink);padding:2px 0 2px 20px;margin-bottom:26px}
+  .block .lbl{font-size:14px;color:var(--muted);margin-bottom:8px}
+  .block .txt{font-family:"Nanum Myeongjo","AppleMyungjo","Batang","바탕",serif;
+    font-size:21px;line-height:1.85;white-space:pre-wrap;word-break:keep-all;max-width:62ch}
+  .block .txt.empty{color:#9AA7B3}
+  button.copy{margin-top:12px;background:var(--ink);color:#fff;border:none;border-radius:4px;
+    padding:11px 20px;font-size:16px;font-family:inherit;cursor:pointer;min-height:44px}
+  button.copy:hover{background:#26343F}
+  button.copy.done{background:#2C5E33}
+  .note{font-size:15px;color:var(--muted);margin-top:22px;padding-top:16px;border-top:1px solid var(--rule)}
+  .note b{color:var(--ink)}
+
+  @media (max-width:800px){
+    body{font-size:17px}
+    .wrap{padding:20px 12px 60px}
+    .frow{grid-template-columns:1fr 1fr;gap:8px}
+    .frow .del{grid-column:2;justify-self:end;width:60px}
+    table.grid th,table.grid td{padding:7px 4px;font-size:14px}
+    table.grid input{font-size:15px;padding:7px 6px}
+    td.delta{font-size:15px}
+    .block .txt{font-size:19px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div style="flex:1 1 240px">
+    <h1>실적회의 문안 생성기</h1>
+    <p class="sub"><a href="/" style="color:#1F5FA8;text-decoration:none">← 성과리포트로 돌아가기</a></p>
+    <p class="sub">회의를 고르면 대상월과 마감 단계, 예상 차수가 자동으로 정해집니다.</p>
+  </div>
+  <div class="ctrls">
+    <label class="ctrl"><span>회의</span>
+      <select id="meeting">
+        <option value="pre">가마감 회의 (25일경)</option>
+        <option value="r1" selected>1차 실적회의 (5일경)</option>
+        <option value="r2">2차 실적회의 (15일경)</option>
+      </select>
+    </label>
+    <label class="ctrl"><span>회의 연도</span>
+      <select id="year"><option>2026</option><option>2027</option></select>
+    </label>
+    <label class="ctrl"><span>회의 월</span>
+      <select id="month"></select>
+    </label>
+    <label class="ctrl"><span>입력 단위</span>
+      <select id="inunit">
+        <option value="1" selected>원</option>
+        <option value="1000">천원</option>
+        <option value="1000000">백만원</option>
+      </select>
+    </label>
+    <label class="ctrl"><span>표기 단위</span>
+      <select id="unit">
+        <option value="1e8">억원</option>
+        <option value="1e6" selected>백만원</option>
+        <option value="1">원</option>
+      </select>
+    </label>
+  </div>
+</header>
+
+<div class="cycle" id="cycle"></div>
+
+<section>
+  <h2 id="h-close">마감</h2>
+  <p class="hint" id="hint-close"></p>
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>구분</th>
+        <th id="th-c1"></th>
+        <th id="th-c2"></th>
+        <th id="th-c3" class="cc3"></th>
+        <th id="th-cd">이번 변동</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>국내 <span class="tag auto">SalesOps 자동</span></td>
+        <td><input class="num" id="c_dom_1" inputmode="numeric" placeholder="0"></td>
+        <td><input class="num" id="c_dom_2" inputmode="numeric" placeholder="0"></td>
+        <td class="cc3"><input class="num" id="c_dom_3" inputmode="numeric" placeholder="0"></td>
+        <td class="delta" id="c_dom_d">—</td>
+      </tr>
+      <tr>
+        <td>해외 <span class="tag manual">수기 입력</span></td>
+        <td><input class="num" id="c_ovs_1" inputmode="numeric" placeholder="0"></td>
+        <td><input class="num" id="c_ovs_2" inputmode="numeric" placeholder="0"></td>
+        <td class="cc3"><input class="num" id="c_ovs_3" inputmode="numeric" placeholder="0"></td>
+        <td class="delta" id="c_ovs_d">—</td>
+      </tr>
+      <tr class="total">
+        <th>합계</th>
+        <td id="c_tot_1">—</td>
+        <td id="c_tot_2">—</td>
+        <td id="c_tot_3" class="cc3">—</td>
+        <td class="delta" id="c_tot_d">—</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="prog hide" id="prog-close"></div>
+
+  <div class="tolbox" id="tolbox">
+    <label>허용 오차 <input id="tol" value="0.5"> %</label>
+    <div class="verdict" id="verdict">확정마감을 입력하면 판정이 표시됩니다.</div>
+  </div>
+
+  <div class="factors">
+    <h3>변동 요인</h3>
+    <div id="c_factors"></div>
+    <button class="add" data-target="c_factors">＋ 요인 추가</button>
+  </div>
+</section>
+
+<section>
+  <h2 id="h-fcst">예상</h2>
+  <p class="hint" id="hint-fcst"></p>
+  <table class="grid">
+    <thead>
+      <tr>
+        <th>구분</th>
+        <th id="th-f1"></th>
+        <th id="th-f2"></th>
+        <th id="th-f3" class="fc3"></th>
+        <th id="th-fd">이번 변동</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>국내 <span class="tag auto">SalesOps 자동</span></td>
+        <td><input class="num" id="f_dom_1" inputmode="numeric" placeholder="0"></td>
+        <td><input class="num" id="f_dom_2" inputmode="numeric" placeholder="0"></td>
+        <td class="fc3"><input class="num" id="f_dom_3" inputmode="numeric" placeholder="0"></td>
+        <td class="delta" id="f_dom_d">—</td>
+      </tr>
+      <tr>
+        <td>해외 <span class="tag manual">수기 입력</span></td>
+        <td><input class="num" id="f_ovs_1" inputmode="numeric" placeholder="0"></td>
+        <td><input class="num" id="f_ovs_2" inputmode="numeric" placeholder="0"></td>
+        <td class="fc3"><input class="num" id="f_ovs_3" inputmode="numeric" placeholder="0"></td>
+        <td class="delta" id="f_ovs_d">—</td>
+      </tr>
+      <tr class="total">
+        <th>합계</th>
+        <td id="f_tot_1">—</td>
+        <td id="f_tot_2">—</td>
+        <td id="f_tot_3" class="fc3">—</td>
+        <td class="delta" id="f_tot_d">—</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="prog hide" id="prog-fcst"></div>
+
+  <div class="factors">
+    <h3>변동 요인</h3>
+    <div id="f_factors"></div>
+    <button class="add" data-target="f_factors">＋ 요인 추가</button>
+  </div>
+</section>
+
+<div class="out">
+  <h2>생성된 문안</h2>
+  <div class="block">
+    <div class="lbl">한 줄 요약 — 슬라이드 상단용</div>
+    <div class="txt empty" id="out_head">숫자를 넣으면 여기에 문장이 생깁니다.</div>
+    <button class="copy" data-src="out_head">복사</button>
+  </div>
+  <div class="block">
+    <div class="lbl" id="lbl_close">마감</div>
+    <div class="txt empty" id="out_close">숫자를 넣으면 여기에 문장이 생깁니다.</div>
+    <button class="copy" data-src="out_close">복사</button>
+  </div>
+  <div class="block">
+    <div class="lbl" id="lbl_fcst">예상</div>
+    <div class="txt empty" id="out_fcst">숫자를 넣으면 여기에 문장이 생깁니다.</div>
+    <button class="copy" data-src="out_fcst">복사</button>
+  </div>
+  <button class="copy" id="copyAll">전체 복사</button>
+
+  <p class="note">
+    <b>회의 주기</b>는 25일 가마감 → 익월 5일 1차 실적회의 → 익월 15일 2차 실적회의로 돌아갑니다. 회의를 바꾸면 대상월과 표시 차수가 함께 바뀝니다.<br>
+    <b>차수는 누적으로 표시됩니다.</b> 3차를 보실 때 1차·2차가 함께 나오고, 표 아래에 차수 진행 흐름이 한 줄로 정리됩니다. 진한 열이 이번 회의에서 보고하는 값입니다.<br>
+    <b>국내 숫자는 SalesOps에서 자동으로 들어옵니다.</b> 1차·2차 예상과 잠정마감이 대상이며, 비어 있는 칸에만 채워지므로 직접 고친 값은 덮어쓰지 않습니다.<br>
+    <b>해외 전 항목</b>과 <b>가마감·확정마감·3차 예상</b>은 아직 자동 취득 경로가 없어 수기 입력입니다. 해외(MAPS) 연동이 붙으면 해외 칸이 자동으로 채워지는 자리입니다.<br>
+    입력값은 회의·연·월별로 이 브라우저에만 저장됩니다.
+  </p>
+</div>
+
+</div>
+
+<script>
+(function(){
+  var SEED = __SEED_JSON__;
+
+  // 회의별 구성. cols = 표에 표시할 열 라벨, cur = 이번 회의가 보고하는 열 번호(1-base)
+  var MEET = {
+    pre: {
+      label:"가마감 회의", when:"25일경",
+      close:{off:0,  cols:["3차 예상","가마감"], cur:2, word:"가마감"},
+      fcst: {off:1,  cols:["사업계획","1차 예상"], cur:2, round:1},
+      tol:false
+    },
+    r1: {
+      label:"1차 실적회의", when:"5일경",
+      close:{off:-1, cols:["3차 가마감","마감(잠정)"], cur:2, word:"잠정마감"},
+      fcst: {off:0,  cols:["1차 예상","2차 예상"], cur:2, round:2},
+      tol:false
+    },
+    r2: {
+      label:"2차 실적회의", when:"15일경",
+      close:{off:-1, cols:["3차 가마감","마감(잠정)","마감(확정)"], cur:3, word:"확정마감"},
+      fcst: {off:0,  cols:["1차 예상","2차 예상","3차 예상"], cur:3, round:3},
+      tol:true
+    }
+  };
+
+  var REASONS = {
+    "확정이월":     {tpl:"{who} {amt}이 확정이월되며 제외"},
+    "수출면장 지연": {tpl:"{who} {amt}이 수출면장 처리 지연으로 이월"},
+    "반품·교품":    {tpl:"{who} {amt}이 반품·교품으로 차감"},
+    "역발행 지연":   {tpl:"{who} {amt}이 역발행 계산서 지연발급으로 미반영"},
+    "대체금액 조정": {tpl:"{who} 대체금액 {amt} 조정"},
+    "신규확정":     {tpl:"{who} {amt}이 신규 확정되며 반영"},
+    "추가수주":     {tpl:"{who} {amt}이 추가 수주로 반영"},
+    "수주취소":     {tpl:"{who} {amt}이 취소되며 제외"},
+    "납기변경":     {tpl:"{who} {amt}이 납기 변경으로 이월"},
+    "출하지연":     {tpl:"{who} {amt}이 출하 지연으로 이월"},
+    "단가조정":     {tpl:"{who} 단가 조정으로 {amt} 변동"},
+    "환율변동":     {tpl:"{who} 환율 변동으로 {amt} 변동"},
+    "기타":        {tpl:"{who} {amt} 변동"}
+  };
+
+  var $ = function(id){ return document.getElementById(id); };
+
+  function parseNum(v){
+    if (v === null || v === undefined) return null;
+    var s = String(v).replace(/[^0-9.-]/g,"");
+    if (s === "" || s === "-") return null;
+    var n = Number(s);
+    return isFinite(n) ? n : null;
+  }
+  function comma(n){ return Math.round(n).toLocaleString("ko-KR"); }
+  function commaLoose(n){ return n.toLocaleString("ko-KR",{maximumFractionDigits:3}); }
+  function inF(){ return Number($("inunit").value); }
+  function amtOf(v){ var n = parseNum(v); return n === null ? null : n * inF(); }
+  function fmt(n){
+    if (n === null) return "—";
+    var u = Number($("unit").value);
+    if (u === 1e8) return (n/1e8).toFixed(1) + "억원";
+    if (u === 1e6) return comma(n/1e6) + "백만원";
+    return comma(n) + "원";
+  }
+  function fmtAbs(n){ return fmt(Math.abs(n)); }
+  function sgn(d){ return d > 0 ? "+" : (d < 0 ? "△" : ""); }
+  function deltaText(cur, pre){
+    if (cur === null || pre === null) return null;
+    var d = cur - pre, r = pre ? (d/Math.abs(pre))*100 : null;
+    var s = sgn(d) + fmtAbs(d);
+    if (r !== null) s += " (" + sgn(d) + Math.abs(r).toFixed(1) + "%)";
+    return {d:d, r:r, text:s, word: d>0?"증가":(d<0?"감소":"보합")};
+  }
+  function paintDelta(el, info){
+    if (!info){ el.textContent = "—"; el.className = "delta flat"; return; }
+    el.textContent = info.text;
+    el.className = "delta " + (info.d>0?"up":(info.d<0?"down":"flat"));
+  }
+  function shift(y, m, off){
+    var t = m - 1 + off, ny = y + Math.floor(t/12), nm = ((t%12)+12)%12 + 1;
+    return {y:ny, m:nm};
+  }
+  function sum(a, b){ return (a===null && b===null) ? null : (a||0) + (b||0); }
+
+  function factorRow(target, data){
+    data = data || {};
+    var row = document.createElement("div");
+    row.className = "frow";
+    var scope = document.createElement("select");
+    ["국내","해외"].forEach(function(o){ var op=document.createElement("option"); op.textContent=o; scope.appendChild(op); });
+    scope.value = data.scope || "국내"; scope.className = "scope";
+    var who = document.createElement("input");
+    who.type="text"; who.className="who"; who.placeholder="대상 (예: 말레이시아 A1 Bone Chip)"; who.value = data.who || "";
+    var amt = document.createElement("input");
+    amt.type="text"; amt.className="amt num"; amt.inputMode="numeric"; amt.placeholder="금액"; amt.value = data.amt || "";
+    var why = document.createElement("select");
+    why.className="why";
+    Object.keys(REASONS).forEach(function(k){ var op=document.createElement("option"); op.textContent=k; why.appendChild(op); });
+    why.value = data.why || "확정이월";
+    var del = document.createElement("button");
+    del.className="x del"; del.type="button"; del.textContent="×"; del.setAttribute("aria-label","요인 삭제");
+    del.addEventListener("click", function(){ row.remove(); render(); });
+    row.appendChild(scope); row.appendChild(who); row.appendChild(amt); row.appendChild(why); row.appendChild(del);
+    $(target).appendChild(row);
+    return row;
+  }
+  function readFactors(target){
+    var out = [];
+    document.querySelectorAll("#"+target+" .frow").forEach(function(r){
+      var amt = amtOf(r.querySelector(".amt").value);
+      var who = r.querySelector(".who").value.trim();
+      if (amt === null && !who) return;
+      out.push({scope:r.querySelector(".scope").value, who:who, amt:amt, why:r.querySelector(".why").value});
+    });
+    return out;
+  }
+  function rawFactors(target){
+    var out = [];
+    document.querySelectorAll("#"+target+" .frow").forEach(function(r){
+      out.push({scope:r.querySelector(".scope").value, who:r.querySelector(".who").value,
+                amt:r.querySelector(".amt").value, why:r.querySelector(".why").value});
+    });
+    return out;
+  }
+  function factorPhrase(f){
+    var meta = REASONS[f.why] || REASONS["기타"];
+    var amtTxt = f.amt === null ? "" : fmtAbs(f.amt);
+    var who = (f.scope === "해외" ? "해외 " : "국내 ") + (f.who || "");
+    return meta.tpl.replace("{who}", who.trim()).replace("{amt}", amtTxt).replace(/\s+/g," ").trim();
+  }
+  function joinPhrases(list){
+    if (!list.length) return "";
+    if (list.length === 1) return list[0];
+    return list.slice(0,-1).join(", ") + ", " + list[list.length-1];
+  }
+
+  function doSection(pfx, spec, colClass, thPrefix, progId){
+    var n = spec.cols.length, cur = spec.cur;
+
+    for (var i=1;i<=3;i++){
+      var th = $(thPrefix + i);
+      if (i <= n) th.textContent = spec.cols[i-1];
+      th.className = (i === cur) ? "cur" : "";
+      if (i === 3) th.className += " " + colClass;
+      if (i === 3) th.style.display = (n >= 3) ? "" : "none";
+    }
+    $(thPrefix + "d").textContent = spec.cols[cur-2] + " 대비";
+
+    var dom = [], ovs = [], tot = [];
+    for (var j=1;j<=3;j++){
+      var d = (j<=n) ? amtOf($(pfx+"_dom_"+j).value) : null;
+      var o = (j<=n) ? amtOf($(pfx+"_ovs_"+j).value) : null;
+      dom.push(d); ovs.push(o); tot.push(sum(d,o));
+      var totCell = $(pfx+"_tot_"+j);
+      totCell.textContent = fmt(tot[j-1]);
+      totCell.className = (j===cur ? "cur " : "") + (j===3 ? colClass : "");
+      var dc = $(pfx+"_dom_"+j).parentNode, oc = $(pfx+"_ovs_"+j).parentNode;
+      dc.className = (j===cur ? "cur " : "") + (j===3 ? colClass : "");
+      oc.className = (j===cur ? "cur " : "") + (j===3 ? colClass : "");
+      if (j === 3){
+        var show = (n >= 3) ? "" : "none";
+        dc.style.display = show; oc.style.display = show; totCell.style.display = show;
+      }
+    }
+
+    var dD = deltaText(dom[cur-1], dom[cur-2]);
+    var oD = deltaText(ovs[cur-1], ovs[cur-2]);
+    var tD = deltaText(tot[cur-1], tot[cur-2]);
+    paintDelta($(pfx+"_dom_d"), dD); paintDelta($(pfx+"_ovs_d"), oD); paintDelta($(pfx+"_tot_d"), tD);
+
+    var progEl = $(progId), filled = 0;
+    for (var k=0;k<n;k++){ if (tot[k] !== null) filled++; }
+    if (filled >= 2){
+      var parts = [];
+      for (var q=0;q<n;q++){
+        if (tot[q] === null) continue;
+        var seg = spec.cols[q] + " <b>" + fmt(tot[q]) + "</b>";
+        var prevIdx = -1;
+        for (var p=q-1;p>=0;p--){ if (tot[p] !== null){ prevIdx = p; break; } }
+        if (prevIdx >= 0){
+          var dd = tot[q] - tot[prevIdx];
+          seg += " (" + sgn(dd) + fmtAbs(dd) + ")";
+        }
+        parts.push(seg);
+      }
+      progEl.innerHTML = "차수 진행 &nbsp;" + parts.join(" &nbsp;→&nbsp; ");
+      progEl.className = "prog";
+    } else {
+      progEl.className = "prog hide";
+    }
+
+    return {dom:dom, ovs:ovs, tot:tot, dD:dD, oD:oD, tD:tD, n:n, cur:cur};
+  }
+
+  function render(){
+    var cfg = MEET[$("meeting").value];
+    var y = Number($("year").value), m = Number($("month").value);
+    var cM = shift(y, m, cfg.close.off);
+    var fM = shift(y, m, cfg.fcst.off);
+    var cValLabel = cfg.close.cols[cfg.close.cur-1];
+    var fValLabel = cfg.fcst.cols[cfg.fcst.cur-1];
+
+    $("cycle").innerHTML = "회의 주기 &nbsp;<b>25일 가마감</b> → <b>익월 5일 1차</b> → <b>익월 15일 2차</b> → 다시 25일 가마감" +
+      "<br>지금 선택: <span class=\"now\">" + y + "년 " + m + "월 " + cfg.label + " (" + cfg.when + ")</span> · " +
+      "보고 대상 <span class=\"now\">" + cM.m + "월 " + cValLabel + "</span> + " +
+      "<span class=\"now\">" + fM.m + "월 " + fValLabel + "</span>";
+
+    $("h-close").textContent = cM.m + "월 " + cValLabel;
+    $("hint-close").textContent = cfg.close.cols.join(" → ") + " 흐름입니다. 진한 열이 이번 회의 보고값입니다.";
+    $("h-fcst").textContent = fM.m + "월 " + fValLabel;
+    $("hint-fcst").textContent = cfg.fcst.cols.join(" → ") + " 흐름입니다. 진한 열이 이번 회의 보고값입니다.";
+    $("lbl_close").textContent = cM.m + "월 " + cValLabel;
+    $("lbl_fcst").textContent = fM.m + "월 " + fValLabel;
+
+    var C = doSection("c", cfg.close, "cc3", "th-c", "prog-close");
+    var F = doSection("f", cfg.fcst,  "fc3", "th-f", "prog-fcst");
+
+    var tolTxt = "";
+    $("tolbox").className = cfg.tol ? "tolbox on" : "tolbox";
+    if (cfg.tol){
+      var tol = parseNum($("tol").value); if (tol === null) tol = 0.5;
+      var vEl = $("verdict");
+      if (C.tD && C.tD.r !== null){
+        var ar = Math.abs(C.tD.r);
+        if (ar <= tol){
+          vEl.className = "verdict ok";
+          vEl.textContent = "정상 — 잠정 대비 " + ar.toFixed(2) + "% (허용 " + tol + "% 이내)";
+          tolTxt = " 잠정마감 대비 차이는 허용 오차 이내로 마감 정확도는 정상입니다.";
+        } else {
+          vEl.className = "verdict warn";
+          vEl.textContent = "확인 필요 — 잠정 대비 " + ar.toFixed(2) + "% (허용 " + tol + "% 초과)";
+          tolTxt = " 잠정마감 대비 차이가 허용 오차 " + tol + "%를 초과해 원인 확인이 필요합니다.";
+        }
+      } else {
+        vEl.className = "verdict";
+        vEl.textContent = "확정마감을 입력하면 판정이 표시됩니다.";
+      }
+    }
+
+    var cf = readFactors("c_factors"), ff = readFactors("f_factors");
+
+    function trajectory(spec, tot){
+      var parts = [];
+      for (var i=0;i<spec.cols.length;i++){
+        if (tot[i] === null) continue;
+        parts.push(spec.cols[i] + " " + fmt(tot[i]));
+      }
+      return parts.length >= 3 ? " 차수 흐름은 " + parts.join(" → ") + "입니다." : "";
+    }
+
+    var closeTxt = "";
+    if (C.tot[C.cur-1] !== null){
+      var base = cfg.close.cols[C.cur-2];
+      closeTxt = cM.m + "월 " + cfg.close.word + "은 " + fmt(C.tot[C.cur-1]);
+      if (C.tD){
+        closeTxt += "으로, " + base + " " + fmt(C.tot[C.cur-2]) + " 대비 " + sgn(C.tD.d) + fmtAbs(C.tD.d);
+        if (C.tD.r !== null) closeTxt += "(" + Math.abs(C.tD.r).toFixed(1) + "%)";
+        closeTxt += " " + C.tD.word + "했습니다.";
+      } else { closeTxt += "입니다."; }
+      var s1 = [];
+      if (C.dom[C.cur-1] !== null) s1.push("국내 " + fmt(C.dom[C.cur-1]) + (C.dD ? "(" + sgn(C.dD.d) + fmtAbs(C.dD.d) + ")" : ""));
+      if (C.ovs[C.cur-1] !== null) s1.push("해외 " + fmt(C.ovs[C.cur-1]) + (C.oD ? "(" + sgn(C.oD.d) + fmtAbs(C.oD.d) + ")" : ""));
+      if (s1.length) closeTxt += " " + s1.join(", ") + "입니다.";
+      closeTxt += trajectory(cfg.close, C.tot);
+      var cp = cf.map(factorPhrase).filter(Boolean);
+      if (cp.length) closeTxt += " 주요 변동 요인은 " + joinPhrases(cp) + "된 데 따른 것입니다.";
+      closeTxt += tolTxt;
+    }
+
+    var fcstTxt = "";
+    if (F.tot[F.cur-1] !== null){
+      var fbase = cfg.fcst.cols[F.cur-2];
+      fcstTxt = fM.m + "월 " + fValLabel + "은 " + fmt(F.tot[F.cur-1]);
+      if (F.tD){
+        fcstTxt += "으로, " + fbase + " " + fmt(F.tot[F.cur-2]) + " 대비 " + sgn(F.tD.d) + fmtAbs(F.tD.d);
+        if (F.tD.r !== null) fcstTxt += "(" + Math.abs(F.tD.r).toFixed(1) + "%)";
+        fcstTxt += " " + F.tD.word + "했습니다.";
+      } else { fcstTxt += "입니다."; }
+      var s2 = [];
+      if (F.dom[F.cur-1] !== null) s2.push("국내 " + fmt(F.dom[F.cur-1]) + (F.dD ? "(" + sgn(F.dD.d) + fmtAbs(F.dD.d) + ")" : ""));
+      if (F.ovs[F.cur-1] !== null) s2.push("해외 " + fmt(F.ovs[F.cur-1]) + (F.oD ? "(" + sgn(F.oD.d) + fmtAbs(F.oD.d) + ")" : ""));
+      if (s2.length) fcstTxt += " " + s2.join(", ") + "입니다.";
+      fcstTxt += trajectory(cfg.fcst, F.tot);
+      var dp = ff.filter(function(f){return f.scope==="국내";}).map(factorPhrase).filter(Boolean);
+      var op = ff.filter(function(f){return f.scope==="해외";}).map(factorPhrase).filter(Boolean);
+      if (dp.length) fcstTxt += " 국내는 " + joinPhrases(dp) + "된 영향입니다.";
+      if (op.length) fcstTxt += " 해외는 " + joinPhrases(op) + "된 영향입니다.";
+    }
+
+    var hp = [];
+    if (C.tot[C.cur-1] !== null) hp.push(cM.m + "월 " + cfg.close.word + " " + fmt(C.tot[C.cur-1]) + (C.tD && C.tD.d !== 0 ? " · " + cfg.close.cols[C.cur-2] + " 대비 " + sgn(C.tD.d) + fmtAbs(C.tD.d) : ""));
+    if (F.tot[F.cur-1] !== null) hp.push(fM.m + "월 " + fValLabel + " " + fmt(F.tot[F.cur-1]) + (F.tD && F.tD.d !== 0 ? " · " + cfg.fcst.cols[F.cur-2] + " 대비 " + sgn(F.tD.d) + fmtAbs(F.tD.d) : ""));
+
+    setOut("out_head", hp.join("  |  ")); setOut("out_close", closeTxt); setOut("out_fcst", fcstTxt);
+    save();
+  }
+
+  function setOut(id, txt){
+    var el = $(id);
+    if (txt){ el.textContent = txt; el.classList.remove("empty"); }
+    else { el.textContent = "숫자를 넣으면 여기에 문장이 생깁니다."; el.classList.add("empty"); }
+  }
+
+  function copyText(t, btn){
+    var done = function(){
+      var old = btn.textContent;
+      btn.textContent = "복사됨"; btn.classList.add("done");
+      setTimeout(function(){ btn.textContent = old; btn.classList.remove("done"); }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(t).then(done, function(){ fallback(t, done); });
+    } else { fallback(t, done); }
+  }
+  function fallback(t, cb){
+    var ta = document.createElement("textarea");
+    ta.value = t; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); cb(); } catch(e){}
+    document.body.removeChild(ta);
+  }
+  document.querySelectorAll("button.copy[data-src]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var el = $(b.getAttribute("data-src"));
+      if (el.classList.contains("empty")) return;
+      copyText(el.textContent, b);
+    });
+  });
+  $("copyAll").addEventListener("click", function(){
+    var out = [];
+    ["out_close","out_fcst"].forEach(function(id){
+      var el = $(id); if (!el.classList.contains("empty")) out.push(el.textContent);
+    });
+    if (out.length) copyText(out.join("\n\n"), $("copyAll"));
+  });
+
+  var FIELDS = ["c_dom_1","c_dom_2","c_dom_3","c_ovs_1","c_ovs_2","c_ovs_3","tol",
+                "f_dom_1","f_dom_2","f_dom_3","f_ovs_1","f_ovs_2","f_ovs_3"];
+  var saveTimer = null;
+  function stateKey(){
+    return "perfnarr2:" + $("meeting").value + ":" + $("year").value + "-" + ("0" + $("month").value).slice(-2);
+  }
+  function collect(){
+    var o = {unit:$("unit").value, inunit:$("inunit").value, fields:{},
+             cf:rawFactors("c_factors"), ff:rawFactors("f_factors")};
+    FIELDS.forEach(function(id){ o.fields[id] = $(id).value; });
+    return o;
+  }
+  function save(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function(){
+      try { localStorage.setItem(stateKey(), JSON.stringify(collect())); } catch(e){}
+    }, 300);
+  }
+  function ym(y,m){ return y + "-" + (m<10 ? "0" : "") + m; }
+  function fillSection(pfx, cols, d){
+    if (!d) return;
+    var f = inF();
+    for (var i=0;i<cols.length;i++){
+      var lab = cols[i], v = null;
+      if (lab.indexOf("1차 예상") === 0) v = d.first;
+      else if (lab.indexOf("2차 예상") === 0) v = d.second;
+      else if (lab.indexOf("마감(잠정)") === 0) v = d.close;
+      if (v === null || v === undefined) continue;
+      var el = $(pfx + "_dom_" + (i+1));
+      if (el && !el.value) el.value = commaLoose(v / f);
+    }
+  }
+  function seed(){
+    var cfg = MEET[$("meeting").value];
+    var y = Number($("year").value), m = Number($("month").value);
+    var cM = shift(y, m, cfg.close.off), fM = shift(y, m, cfg.fcst.off);
+    fillSection("c", cfg.close.cols, SEED[ym(cM.y, cM.m)]);
+    fillSection("f", cfg.fcst.cols, SEED[ym(fM.y, fM.m)]);
+  }
+  function clearAll(){
+    FIELDS.forEach(function(id){ if (id !== "tol") $(id).value = ""; });
+    $("c_factors").innerHTML = ""; $("f_factors").innerHTML = "";
+  }
+  function load(){
+    var o = null;
+    try { var raw = localStorage.getItem(stateKey()); if (raw) o = JSON.parse(raw); } catch(e){}
+    clearAll();
+    if (o){
+      if (o.unit) $("unit").value = o.unit;
+      if (o.inunit) $("inunit").value = o.inunit;
+      FIELDS.forEach(function(id){ if (o.fields && o.fields[id] !== undefined) $(id).value = o.fields[id]; });
+      (o.cf||[]).forEach(function(f){ factorRow("c_factors", f); });
+      (o.ff||[]).forEach(function(f){ factorRow("f_factors", f); });
+    }
+    prevInF = inF();
+    seed(); ensureRows(); render();
+  }
+  var prevInF = 1;
+  function ensureRows(){
+    prevInF = inF();
+    if (!document.querySelector("#c_factors .frow")) factorRow("c_factors");
+    if (!document.querySelector("#f_factors .frow")) factorRow("f_factors");
+  }
+  function convertInputs(){
+    var f = inF();
+    if (f === prevInF) return;
+    document.querySelectorAll("input.num").forEach(function(el){
+      var n = parseNum(el.value);
+      if (n === null) return;
+      el.value = commaLoose(n * prevInF / f);
+    });
+    prevInF = f;
+  }
+
+  (function initMonths(){
+    var sel = $("month");
+    for (var i=1;i<=12;i++){
+      var op = document.createElement("option");
+      op.value = i; op.textContent = i + "월";
+      if (i === 9) op.selected = true;
+      sel.appendChild(op);
+    }
+  })();
+
+  document.querySelectorAll("button.add").forEach(function(b){
+    b.addEventListener("click", function(){ factorRow(b.getAttribute("data-target")); });
+  });
+  document.addEventListener("input", function(e){
+    if (e.target.matches("input, select")) render();
+  });
+  document.addEventListener("change", function(e){
+    if (!e.target.matches("select")) return;
+    var id = e.target.id;
+    if (id === "meeting" || id === "year" || id === "month") { load(); return; }
+    if (id === "inunit") convertInputs();
+    render();
+  });
+  document.addEventListener("blur", function(e){
+    if (e.target.classList && e.target.classList.contains("num")){
+      var n = parseNum(e.target.value);
+      e.target.value = n === null ? "" : commaLoose(n);
+      render();
+    }
+  }, true);
+
+  load();
+})();
+</script>
+</body>
+</html>
