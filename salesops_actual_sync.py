@@ -4,24 +4,20 @@
   8월 국내 마감은 2026-09-09 에 august_domestic_close.py 로 한 번 복사해
   넣었고, 그 스크립트는 감사 파일로 잠겨 다시 돌지 않는다. 그래서 SalesOps
   에서 최종마감을 해도 현황판·누계(actuals 를 읽는 화면)는 9월 9일의 잠정
-  숫자에 멈춰 있었다. 전월비교 열만 SalesOps 를 실시간으로 읽어 두 숫자가
-  갈렸다.
-
-방식
-  일회성 스크립트를 반복하는 대신, SalesOps 연동값을 주기적으로 다시 읽어
-  actuals 를 맞춘다. 값이 같으면 저장하지 않는다.
+  숫자에 멈춰 있었다. 전월비교 열만 연동값을 읽어 두 숫자가 갈렸다.
 
 값의 출처
-  SalesOps /api/performance 의 계약 필드를 그대로 쓴다.
-  business_division, market, customer_type, final_close_amount, close.stage
-  화면 숫자를 옮겨 적지 않는다.
+  이 서버는 SalesOps 로 직접 나가지 못한다(URLError). browser_bridge 가
+  사용자 브라우저로 SalesOps /api/performance 를 읽어 스냅샷으로 저장하고
+  있으므로, 그 스냅샷의 final_close_amount(=close) 를 그대로 쓴다.
+  직접 호출이 되는 환경이면 그 값을 먼저 쓴다. 화면 숫자를 옮겨 적지 않는다.
 
 원칙 (8월 국내 마감 때와 동일)
   1) 처음 바꾸기 전에 통째로 백업한다
   2) entries 는 한 글자도 건드리지 않는다
   3) 대상월 국내 actuals 키만 쓴다. 다른 월·해외는 건드리지 않는다
   4) 6개 축이 다 오고 합계가 0보다 클 때만 반영한다
-  5) SalesOps 가 응답하지 않으면 아무것도 쓰지 않는다(마지막 값 유지)
+  5) 연동값이 없으면 아무것도 쓰지 않는다(마지막 값 유지)
   6) 저장 후 다시 읽어 확인하고, 무엇을 왜 바꿨는지 감사 기록에 남긴다
 
 되돌리기
@@ -54,8 +50,9 @@ BACKUP = DATA_DIR / "salesops_actual_sync.before.json"
 REGION = "국내"
 BUSINESSES = ("덴탈", "메디컬", "에스테틱")
 KINDS = ("기존", "신규")
+AXIS_COUNT = len(BUSINESSES) * len(KINDS)
 MIN_INTERVAL_SECONDS = 900
-REQUEST_TIMEOUT = 6
+REQUEST_TIMEOUT = 5
 
 _lock = threading.Lock()
 _state = {"running": False, "last_attempt_at": 0.0, "last_result": None}
@@ -86,95 +83,104 @@ def _previous_period(today=None):
     return last_month.year, last_month.month
 
 
-def _request_payload(year, month):
-    """SalesOps /api/performance 원문을 그대로 받는다."""
+def _to_int(value):
+    try:
+        return int(round(float(value)))
+    except (TypeError, ValueError):
+        return None
+
+
+def _values_from_live(year, month):
+    """직접 호출이 되는 환경에서만 쓴다. 마감 단계까지 함께 얻는다."""
     token = os.environ.get(live.TOKEN_ENV, "").strip()
     if not token:
-        return None, "token_missing"
+        return None, None, "token_missing"
     url = live.SALESOPS_API + "?" + urllib.parse.urlencode({
         "year": int(year), "month": int(month),
     })
     headers = {
         "Accept": "application/json",
-        "User-Agent": "MedPark-Performance-Report/actual-sync-1.0",
-        "X-Requested-With": "XMLHttpRequest",
+        "User-Agent": "MedPark-Performance-Report/actual-sync-1.1",
         "Authorization": "Bearer " + token,
-        "X-Forwarded-Proto": "https",
-        "X-Forwarded-Host": live.SALESOPS_HOST,
-        "X-Forwarded-Port": "443",
+        "X-Read-Only-Token": token,
     }
-    opener = urllib.request.build_opener(live._NoRedirect)
     try:
         req = urllib.request.Request(url, headers=headers, method="GET")
-        with opener.open(req, timeout=REQUEST_TIMEOUT) as res:
+        with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as res:
             if getattr(res, "status", 200) != 200:
-                return None, "http_%s" % getattr(res, "status", "?")
-            raw = res.read().decode("utf-8", "replace")
-        payload = json.loads(raw)
+                return None, None, "http_%s" % getattr(res, "status", "?")
+            payload = json.loads(res.read().decode("utf-8", "replace"))
     except Exception as exc:
-        return None, type(exc).__name__
+        return None, None, type(exc).__name__
     if not isinstance(payload, dict) or not isinstance(payload.get("rows"), list):
-        return None, "unexpected_payload"
-    return payload, None
-
-
-def _domestic_close_values(payload):
-    """계약 필드로 (사업부, 국내, 기존/신규) 별 최종마감액을 뽑는다."""
+        return None, None, "unexpected_payload"
     values = {}
-    for row in payload.get("rows") or []:
-        if not isinstance(row, dict):
+    for row in payload["rows"]:
+        if not isinstance(row, dict) or row.get("market") != REGION:
             continue
-        if row.get("market") != REGION:
-            continue
-        business = row.get("business_division")
-        kind = row.get("customer_type")
+        business, kind = row.get("business_division"), row.get("customer_type")
         if business not in BUSINESSES or kind not in KINDS:
             continue
-        try:
-            values[(business, REGION, kind)] = int(round(float(
-                row.get("final_close_amount") or 0
-            )))
-        except (TypeError, ValueError):
-            return None, "bad_amount"
-    if len(values) != len(BUSINESSES) * len(KINDS):
-        return None, "expected_%d_rows_got_%d" % (
-            len(BUSINESSES) * len(KINDS), len(values),
-        )
-    return values, None
-
-
-def _stage_label(payload):
+        amount = _to_int(row.get("final_close_amount") or 0)
+        if amount is None:
+            return None, None, "bad_amount"
+        values[(business, REGION, kind)] = amount
+    if len(values) != AXIS_COUNT:
+        return None, None, "live_expected_%d_got_%d" % (AXIS_COUNT, len(values))
     close = payload.get("close") if isinstance(payload.get("close"), dict) else {}
     if close.get("final"):
-        return "최종마감", True
-    if close.get("provisional"):
-        return "잠정마감", True
-    if close.get("locked"):
-        return "마감", True
-    return str(close.get("stage") or "OPEN"), False
+        stage = "최종마감"
+    elif close.get("provisional"):
+        stage = "잠정마감"
+    elif close.get("locked"):
+        stage = "마감"
+    else:
+        stage = None
+    return values, stage, None
+
+
+def _values_from_snapshot(year, month):
+    """browser_bridge 가 사용자 브라우저로 받아 저장한 연동 스냅샷을 쓴다."""
+    try:
+        index, saved_at = live._load_snapshot(year, month)
+    except Exception as exc:
+        return None, None, "snapshot_error:" + type(exc).__name__
+    if not index:
+        return None, None, "snapshot_empty"
+    values = {}
+    for (business, region, kind), row in index.items():
+        if region != REGION or business not in BUSINESSES or kind not in KINDS:
+            continue
+        if not isinstance(row, dict):
+            continue
+        amount = _to_int(row.get("close"))
+        if amount is None:
+            continue
+        values[(business, REGION, kind)] = amount
+    if len(values) != AXIS_COUNT:
+        return None, None, "snapshot_expected_%d_got_%d" % (AXIS_COUNT, len(values))
+    return values, saved_at, None
 
 
 def sync(year=None, month=None, force=False):
-    """SalesOps 마감값으로 대상월 국내 actuals 를 맞춘다."""
+    """SalesOps 연동값으로 대상월 국내 actuals 를 맞춘다."""
     if year is None or month is None:
         year, month = _previous_period()
     year, month = int(year), int(month)
     period = "%04d-%02d" % (year, month)
 
-    payload, error = _request_payload(year, month)
-    if error:
-        return {"status": "not_applied", "period": period, "reason": error}
-
-    stage_label, locked = _stage_label(payload)
-    if not locked and not force:
-        return {
-            "status": "not_applied", "period": period,
-            "reason": "not_closed", "stage": stage_label,
-        }
-
-    values, error = _domestic_close_values(payload)
-    if error:
-        return {"status": "not_applied", "period": period, "reason": error}
+    values, stage, live_error = _values_from_live(year, month)
+    source = "live"
+    saved_at = None
+    if live_error:
+        values, saved_at, snapshot_error = _values_from_snapshot(year, month)
+        source = "snapshot"
+        stage = None
+        if snapshot_error:
+            return {
+                "status": "not_applied", "period": period,
+                "reason": snapshot_error, "live_reason": live_error,
+            }
 
     total = sum(values.values())
     if total <= 0:
@@ -186,7 +192,7 @@ def sync(year=None, month=None, force=False):
     for (business, region, kind), amount in sorted(values.items()):
         key = base.actual_key(year, month, business, region, kind)
         old = actuals.get(key)
-        if old is None or int(old) != amount:
+        if old is None or _to_int(old) != amount:
             changed.append({
                 "business": business, "region": region, "kind": kind,
                 "key": key, "old": old, "new": amount,
@@ -194,11 +200,11 @@ def sync(year=None, month=None, force=False):
 
     meta = store.get("meta") or {}
     status_key = "%s_domestic_close_status" % period
-    stage_changed = meta.get(status_key) != stage_label
-    if not changed and not stage_changed:
+    stage_changed = bool(stage) and meta.get(status_key) != stage
+    if not changed and not stage_changed and not force:
         return {
-            "status": "unchanged", "period": period, "stage": stage_label,
-            "total": total,
+            "status": "unchanged", "period": period, "total": total,
+            "source": source, "snapshot_saved_at": saved_at,
         }
 
     if not BACKUP.exists():
@@ -209,9 +215,10 @@ def sync(year=None, month=None, force=False):
     for row in changed:
         after_actuals[row["key"]] = row["new"]
     after_meta = after.setdefault("meta", {})
-    after_meta[status_key] = stage_label
+    if stage:
+        after_meta[status_key] = stage
     after_meta["%s_domestic_close_source" % period] = (
-        "SalesOps /api/performance final_close_amount 자동 동기화"
+        "SalesOps 연동값(%s) 자동 동기화" % source
     )
     after_meta["%s_domestic_close_total" % period] = total
     after_meta["%s_domestic_close_synced_at" % period] = datetime.datetime.now(
@@ -222,12 +229,13 @@ def sync(year=None, month=None, force=False):
     verify = base.read_store().get("actuals") or {}
     mismatched = [
         row["key"] for row in changed
-        if int(verify.get(row["key"], -1)) != row["new"]
+        if _to_int(verify.get(row["key"])) != row["new"]
     ]
     result = {
         "status": "applied" if not mismatched else "verify_failed",
-        "period": period, "stage": stage_label, "total": total,
-        "changed": changed, "mismatched": mismatched,
+        "period": period, "total": total, "source": source,
+        "snapshot_saved_at": saved_at, "stage": stage,
+        "live_reason": live_error, "changed": changed, "mismatched": mismatched,
         "entries_untouched": (
             len(after.get("entries") or []) == len(store.get("entries") or [])
         ),
@@ -260,6 +268,8 @@ def _sync_in_background():
 def salesops_actual_sync_before_request():
     path = request.path or "/"
     if path.startswith("/static") or path.startswith("/entry-status"):
+        return None
+    if path.startswith("/salesops-sync") or path.startswith("/salesops-actual-sync"):
         return None
     now = time.time()
     with _lock:
