@@ -1,20 +1,29 @@
-"""3차 회차 연동과 배너 문구를 SalesOps 실제 단계에 맞춘다.
+"""SalesOps 연동을 회의 흐름에 맞게 현황판에 채운다.
 
-문제 1 · 3차가 비어 있었다
-  SalesOps /api/performance 는 third_estimated_amount, third_confirmed_amount 를
-  내려주는데 받는 쪽이 1차·2차·마감만 썼다. 빠진 곳이 세 군데였다.
-    1) browser_bridge._parse_doc      스냅샷에 3차를 저장하지 않음
-    2) root_live_fetch._build_report  narrative 계열 화면
-    3) root_boot_cache._build_report  현황판이 실제로 쓰는 캐시 경로(핵심)
-
-문제 2 · 배너 문구가 고정이었다
-  "8월 잠정마감 · 9월 2차"가 코드에 박혀 있어, 8월을 최종마감하고 9월 3차를
-  확정해도 문구가 그대로였다. 월·마감단계·회차를 실제 값으로 만든다.
-  마감단계는 SalesOps 응답의 close 블록(final/provisional)을 스냅샷에 함께
-  저장해 쓴다.
+바로잡은 것
+  1) 3차가 비어 있었다
+     SalesOps 는 third_estimated/third_confirmed 를 내려주는데 받는 쪽이
+     1차·2차·마감만 썼다. 빠진 곳이 세 군데였다.
+       browser_bridge._parse_doc      스냅샷에 저장 안 함
+       root_live_fetch._build_report  narrative 계열 화면
+       root_boot_cache._build_report  현황판이 쓰는 캐시 경로(핵심)
+  2) 마감이 8월에만 들어왔다
+     root_boot_cache 가 month == 8 로 고정돼 있었다. 어느 달이든 연동값을 쓴다.
+  3) 열 구성이 회의 흐름과 달랐다
+     3차가 확정·예상 두 칸을 차지하고 가마감·잠정마감이 없었다.
+     회의 순서(5일 2차 · 15일 3차 · 25일 가마감 · 익월 마감)에 맞춰 바꾼다.
+       전월 비교  전월 가마감 · 전월 잠정마감 · 전월 확정마감
+       당월      1차 예상 · 2차 예상 · 3차 예상 · 가마감 · 마감
+     표 구조(열 개수)는 그대로 두고 값과 머리글만 바꾼다. HTML 을 새로 짜지
+     않으므로 다른 화면·PPT 경로가 깨지지 않는다.
+  4) 배너 문구가 "8월 잠정마감 · 9월 2차"로 고정이었다
+     전월 마감단계와 당월 회차를 실제 값으로 만든다.
 
 값의 출처
-  SalesOps 계약 필드를 그대로 쓴다. 화면 숫자를 옮겨 적지 않는다.
+  SalesOps /api/performance 계약 필드만 쓴다. 화면 숫자를 옮겨 적지 않는다.
+    first_fcst_amount / second_fcst_amount / third_estimated_amount
+    flash_close_amount(가마감) / provisional_close_amount(잠정마감)
+    final_close_amount(확정마감) / close.stage
 """
 
 import datetime
@@ -27,8 +36,11 @@ import root_live_fetch as live
 app = prev.app
 ui = live.ui
 
-THIRD_FIELDS = ("third_forecast", "third_confirmed")
-_CLOSE_STAGE = {}
+SNAPSHOT_FIELDS = (
+    "first", "second", "third_forecast", "third_confirmed",
+    "flash_close", "provisional_close", "close", "close_stage",
+)
+_BANNER = {}
 
 
 def _num(value):
@@ -51,7 +63,7 @@ def _stage_label(doc):
     return ""
 
 
-# ---------- 1) 브라우저가 넘겨준 응답에서 3차·마감단계까지 저장 ----------
+# ---------- 1) 브라우저가 넘겨준 응답을 전부 스냅샷에 담는다 ----------
 
 _original_parse_doc = bridge._parse_doc
 
@@ -70,6 +82,8 @@ def _parse_doc(doc):
             continue
         target["third_forecast"] = _num(row.get("third_estimated_amount"))
         target["third_confirmed"] = _num(row.get("third_confirmed_amount"))
+        target["flash_close"] = _num(row.get("flash_close_amount"))
+        target["provisional_close"] = _num(row.get("provisional_close_amount"))
         target["close_stage"] = stage
     return index
 
@@ -77,7 +91,7 @@ def _parse_doc(doc):
 bridge._parse_doc = _parse_doc
 
 
-# ---------- 2·3) 리포트 조립 시 국내 행과 소계에 3차 반영 ----------
+# ---------- 2·3) 리포트 조립: 회의 흐름대로 값을 앉힌다 ----------
 
 def _fetch_index(module, year, month):
     fetch = getattr(module, "_fetch", None) or live._fetch
@@ -87,39 +101,66 @@ def _fetch_index(module, year, month):
         return {}
 
 
-def _fill_third(module, report, year, month):
+def _fill(module, report, year, month):
     rows = report.get("rows") if isinstance(report, dict) else None
     if not rows:
         return report
     current = _fetch_index(module, year, month)
+    py, pm = ((year - 1, 12) if month == 1 else (year, month - 1))
+    previous = _fetch_index(module, py, pm)
     details = [row for row in rows if not row.get("is_total")]
+
     for row in details:
         if row.get("region") != "국내":
             continue
-        source = current.get((row.get("business"), "국내", row.get("kind"))) or {}
-        for field in THIRD_FIELDS:
-            if source.get(field) is not None:
-                row[field] = source[field]
+        key = (row.get("business"), "국내", row.get("kind"))
+        cur = current.get(key) or {}
+        old = previous.get(key) or {}
+        # 전월 비교: 가마감 → 잠정마감 → 확정마감
+        if old.get("flash_close") is not None:
+            row["prev_first"] = old["flash_close"]
+        if old.get("provisional_close") is not None:
+            row["prev_preclose"] = old["provisional_close"]
+        if old.get("close") is not None:
+            row["prev_close"] = old["close"]
+        # 당월: 1차 → 2차 → 3차 예상 → 가마감 → 마감
+        for field in ("first", "second"):
+            if cur.get(field) is not None:
+                row[field] = cur[field]
+        if cur.get("third_forecast") is not None:
+            row["third_confirmed"] = cur["third_forecast"]
+        if cur.get("flash_close") is not None:
+            row["third_forecast"] = cur["flash_close"]
+        close = cur.get("close") or cur.get("provisional_close")
+        if close is not None:
+            row["close"] = close
+            row["close_has"] = True
+
     summer = getattr(module, "_sum", None) or live._sum
+    fields = (
+        "prev_first", "prev_preclose", "prev_close", "first", "second",
+        "third_confirmed", "third_forecast", "close", "next_first", "carryover",
+        "qproj", "october", "november", "december", "q4proj", "second_half",
+    )
     for total in [row for row in rows if row.get("is_total")]:
         scope = details if total.get("is_grand") else [
             row for row in details if row.get("business") == total.get("business")
         ]
-        for field in THIRD_FIELDS:
+        for field in fields:
             total[field] = summer(scope, field)
-    # 배너용: 전월 마감단계와 당월 회차·금액을 기억해 둔다.
-    py, pm = ((year - 1, 12) if month == 1 else (year, month - 1))
-    previous = _fetch_index(module, py, pm)
+        total["close_has"] = bool(scope) and all(row.get("close_has") for row in scope)
+
     stages = [v.get("close_stage") for v in previous.values() if v.get("close_stage")]
     domestic = [row for row in details if row.get("region") == "국내"]
-    for field, label in (("third_forecast", "3차"), ("second", "2차"), ("first", "1차")):
+    _BANNER[(year, month)] = {
+        "previous_month": pm,
+        "previous_stage": stages[0] if stages else "마감",
+        "second_total": summer(domestic, "second"),
+    }
+    for field, label in (("third_confirmed", "3차"), ("second", "2차"), ("first", "1차")):
         total = summer(domestic, field)
         if total:
-            _CLOSE_STAGE[(year, month)] = {
-                "previous_stage": stages[0] if stages else "마감",
-                "round_label": label, "round_total": total,
-                "previous_month": pm,
-            }
+            _BANNER[(year, month)].update({"round_label": label, "round_total": total})
             break
     return report
 
@@ -128,39 +169,67 @@ def _wrap_build_report(module):
     original = module._build_report
 
     def _build_report(year, month):
-        return _fill_third(module, original(year, month), year, month)
+        return _fill(module, original(year, month), year, month)
 
     module._build_report = _build_report
 
 
-def _wrap_banner(module, meta_key):
+def _wrap_banner(module):
     original = module._banner
 
     def _banner(report):
         html = original(report)
         if "국내연동 OK" not in html:
             return html
-        today = datetime.date.today()
-        info = _CLOSE_STAGE.get((today.year, today.month)) or {}
-        stage = info.get("previous_stage") or "마감"
-        previous_month = info.get("previous_month") or (today.month - 1 or 12)
-        meta = report.get(meta_key, {})
+        info = _BANNER.get((report.get("year"), report.get("month"))) or {}
+        month = report.get("month") or datetime.date.today().month
+        previous_month = info.get("previous_month") or (month - 1 or 12)
         html = html.replace(
-            f"{previous_month}월 잠정마감", f"{previous_month}월 {stage}",
+            f"{previous_month}월 잠정마감",
+            f"{previous_month}월 {info.get('previous_stage') or '마감'}",
         )
-        if info.get("round_label") and info.get("round_label") != "2차":
+        if info.get("round_label") and info["round_label"] != "2차":
             html = html.replace(
-                f"{today.month}월 2차 {ui.money_m(meta.get('second_total'))}백만원",
-                f"{today.month}월 {info['round_label']} {ui.money_m(info.get('round_total'))}백만원",
+                f"{month}월 2차 {ui.money_m(info.get('second_total'))}백만원",
+                f"{month}월 {info['round_label']} {ui.money_m(info.get('round_total'))}백만원",
             )
         return html
 
     module._banner = _banner
 
 
-for module, meta_key in ((live, "live_meta"), (cache, "boot_cache")):
-    _wrap_build_report(module)
-    _wrap_banner(module, meta_key)
+for _module in (live, cache):
+    _wrap_build_report(_module)
+    _wrap_banner(_module)
+
+
+# ---------- 4) 표 머리글을 회의 흐름대로 ----------
+
+_original_render_report = ui.render_report
+
+
+def render_report(report, user, capture=False):
+    html = _original_render_report(report, user, capture)
+    month = report.get("month")
+    previous_month = (month - 1) or 12 if month else None
+    stage = (_BANNER.get((report.get("year"), month)) or {}).get("previous_stage") or "마감"
+    if previous_month:
+        html = html.replace(
+            f"<th>{previous_month}월 1차</th><th>{previous_month}월 가마감</th>"
+            f"<th>{previous_month}월 마감</th>",
+            f"<th>{previous_month}월 가마감</th><th>{previous_month}월 잠정마감</th>"
+            f"<th>{previous_month}월 {stage}</th>",
+            1,
+        )
+    html = html.replace(
+        "<th>3차 확정</th><th>3차 예상</th><th>실제 마감</th>",
+        "<th>3차 예상</th><th>가마감</th><th>마감</th>",
+        1,
+    )
+    return html
+
+
+ui.render_report = render_report
 
 # 현황판은 캐시를 거쳐 렌더되므로, 이미 담긴 캐시를 비워 새 값으로 다시 채운다.
 try:
