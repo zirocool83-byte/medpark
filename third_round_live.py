@@ -14,16 +14,14 @@
      회의 순서(5일 2차 · 15일 3차 · 25일 가마감 · 익월 마감)에 맞춰 바꾼다.
        전월 비교  전월 가마감 · 전월 잠정마감 · 전월 확정마감
        당월      1차 예상 · 2차 예상 · 3차 예상 · 가마감 · 마감
-     표 구조(열 개수)는 그대로 두고 값과 머리글만 바꾼다. HTML 을 새로 짜지
-     않으므로 다른 화면·PPT 경로가 깨지지 않는다.
+     표 구조(열 개수)는 그대로 두고 값과 머리글만 바꾼다.
   4) 배너 문구가 "8월 잠정마감 · 9월 2차"로 고정이었다
-     전월 마감단계와 당월 회차를 실제 값으로 만든다.
+  5) 지금이 몇 차 기간인지 표에 표시가 없었다
+     날짜로 현재 회차를 판정해 그 열만 강조한다.
+       ~4일 1차 · 5~14일 2차 · 15~23일 3차 · 24일~ 가마감 · 익월 마감
 
 값의 출처
   SalesOps /api/performance 계약 필드만 쓴다. 화면 숫자를 옮겨 적지 않는다.
-    first_fcst_amount / second_fcst_amount / third_estimated_amount
-    flash_close_amount(가마감) / provisional_close_amount(잠정마감)
-    final_close_amount(확정마감) / close.stage
 """
 
 import datetime
@@ -36,11 +34,10 @@ import root_live_fetch as live
 app = prev.app
 ui = live.ui
 
-SNAPSHOT_FIELDS = (
-    "first", "second", "third_forecast", "third_confirmed",
-    "flash_close", "provisional_close", "close", "close_stage",
-)
 _BANNER = {}
+
+# 당월 회차 열의 CSS 클래스. excel_ui 의 셀 클래스와 같다.
+STAGE_CLASS = {"1차": "c1", "2차": "c2", "3차": "c3c", "가마감": "c3f", "마감": "cc"}
 
 
 def _num(value):
@@ -61,6 +58,18 @@ def _stage_label(doc):
     if close.get("locked"):
         return "마감"
     return ""
+
+
+def current_round(today=None):
+    """오늘이 어느 회차 기간인지. 회의는 5일 2차 · 15일 3차 · 25일 가마감."""
+    day = (today or datetime.date.today()).day
+    if day >= 24:
+        return "가마감"
+    if day >= 15:
+        return "3차"
+    if day >= 5:
+        return "2차"
+    return "1차"
 
 
 # ---------- 1) 브라우저가 넘겨준 응답을 전부 스냅샷에 담는다 ----------
@@ -203,7 +212,16 @@ for _module in (live, cache):
     _wrap_banner(_module)
 
 
-# ---------- 4) 표 머리글을 회의 흐름대로 ----------
+# ---------- 4·5) 표 머리글 정리 + 현재 회차 강조 ----------
+
+_STAGE_CSS = """<style>
+table.report td.stage-now, table.report th.stage-now { background:#e8f3ff !important; }
+table.report th.stage-now { color:#0d3b66; }
+table.report td.stage-now { font-weight:800; box-shadow: inset 2px 0 0 #2f7ac6, inset -2px 0 0 #2f7ac6; }
+table.report tr.grand td.stage-now, table.report tr.subtotal td.stage-now { background:#d7e9fb !important; }
+.stage-now-note { margin:0 0 10px; padding:8px 12px; border-radius:7px; border:1px solid #bcd8f1;
+  background:#eef6ff; font-size:13px; font-weight:700; color:#0d3b66; }
+</style>"""
 
 _original_render_report = ui.render_report
 
@@ -211,7 +229,7 @@ _original_render_report = ui.render_report
 def render_report(report, user, capture=False):
     html = _original_render_report(report, user, capture)
     month = report.get("month")
-    previous_month = (month - 1) or 12 if month else None
+    previous_month = ((month - 1) or 12) if month else None
     stage = (_BANNER.get((report.get("year"), month)) or {}).get("previous_stage") or "마감"
     if previous_month:
         html = html.replace(
@@ -226,7 +244,23 @@ def render_report(report, user, capture=False):
         "<th>3차 예상</th><th>가마감</th><th>마감</th>",
         1,
     )
-    return html
+
+    # 지금이 몇 차 기간인지 해당 열만 강조한다.
+    today = datetime.date.today()
+    round_label = current_round(today)
+    header = {"1차": "1차 예상", "2차": "2차 예상", "3차": "3차 예상",
+              "가마감": "가마감", "마감": "마감"}[round_label]
+    cell_class = STAGE_CLASS[round_label]
+    html = html.replace(f"<th>{header}</th>", f"<th class='stage-now'>{header}</th>", 1)
+    html = html.replace(f"<td class='{cell_class}'>", f"<td class='{cell_class} stage-now'>")
+    html = html.replace(
+        "<div class='table-wrap'>",
+        f"<p class='stage-now-note'>오늘 {today.month}월 {today.day}일 · "
+        f"{round_label} 기간입니다. 표에서 {header} 열을 강조했습니다.</p>"
+        "<div class='table-wrap'>",
+        1,
+    )
+    return html.replace("</head>", _STAGE_CSS + "</head>", 1)
 
 
 ui.render_report = render_report
