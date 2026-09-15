@@ -1,4 +1,4 @@
-"""문안 작성기의 회차를 현황판과 맞춘다.
+"""문안 작성기·PPT 의 회차를 현황판과 맞춘다.
 
 바로잡은 것
   1) 회의 이름이 한 칸 밀려 있었다
@@ -8,8 +8,10 @@
        5일  → 2차 실적회의   15일 → 3차 실적회의   25일 → 가마감 회의
   2) 열 → 필드 매핑이 어긋났다
      현황판 열을 회의 흐름대로 재배치하면서 당월 3차 예상을 third_confirmed,
-     가마감을 third_forecast 자리에 앉혔다(third_round_live). 문안 작성기는
-     예전 자리를 읽고 있어 숫자가 비거나 다른 값이 나왔다.
+     가마감을 third_forecast 자리에 앉혔다(third_round_live). 문안 작성기와
+     PPT 표는 예전 자리를 읽고 있어 3차가 비어 있었다.
+     narrative_config.field_of 와 narrative_table_cfg 의 MIDDLE·PLAN_ONLY 를
+     함께 고친다.
   3) 처음 열 때 회의가 날짜를 따르지 않았다
      항상 5일 회의로 열렸다. 오늘 날짜에 맞는 회의를 먼저 보여준다.
 
@@ -20,6 +22,7 @@ import datetime
 
 import overseas_live as prev
 import narrative_config as ncfg
+import narrative_table_cfg as tcfg
 
 app = prev.app
 
@@ -38,10 +41,32 @@ for key, (label, when) in LABELS.items():
         meeting["when"] = when
 
 # 2) 열 → 필드 매핑을 현재 자리에 맞춘다.
+#    현황판 재배치 이후: 3차 예상=third_confirmed, 가마감=third_forecast
 CONFIG.setdefault("field_of", {}).update({
     "3차 예상": "third_confirmed",
     "가마감": "third_forecast",
 })
+
+FIELD_SWAP = {
+    # 3차를 가리키던 자리
+    ("{cm}월 3차 예상", "third_forecast"): "third_confirmed",
+    ("{cm}월 3차", "third_forecast"): "third_confirmed",
+    ("{cm}월 3차 FCST", "third_forecast"): "third_confirmed",
+}
+
+
+def _fix(columns):
+    for column in columns or []:
+        if not isinstance(column, dict):
+            continue
+        swapped = FIELD_SWAP.get((column.get("label"), column.get("f")))
+        if swapped:
+            column["f"] = swapped
+
+
+for _table in (getattr(tcfg, "MIDDLE", {}), getattr(tcfg, "PLAN_ONLY", {})):
+    for _columns in (_table or {}).values():
+        _fix(_columns)
 
 # 3) 처음 열 때 오늘 날짜에 맞는 회의를 고른다.
 _day = datetime.date.today().day
