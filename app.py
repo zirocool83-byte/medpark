@@ -11,6 +11,7 @@
 import traceback
 
 CANDIDATES = [
+    "narrative_round_fix",
     "overseas_live",
     "third_round_live",
     "salesops_actual_sync",
