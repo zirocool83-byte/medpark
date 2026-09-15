@@ -31,7 +31,8 @@ import root_live_fetch as live
 from flask import jsonify, request
 
 app = prev.app
-base = prev.base
+base = live.base
+ui = live.ui
 
 GLOBAL_API = os.environ.get(
     "GLOBAL_API",
@@ -248,7 +249,7 @@ _SCRIPT = """
 </script>
 """
 
-_original_render_report = prev.ui.render_report
+_original_render_report = ui.render_report
 
 
 def render_report(report, user, capture=False):
@@ -259,7 +260,7 @@ def render_report(report, user, capture=False):
     return html.replace("</body>", script + "</body>", 1)
 
 
-prev.ui.render_report = render_report
+ui.render_report = render_report
 
 try:
     cache._CACHE.clear()
