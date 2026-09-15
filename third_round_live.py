@@ -7,24 +7,27 @@
        browser_bridge._parse_doc      스냅샷에 저장 안 함
        root_live_fetch._build_report  narrative 계열 화면
        root_boot_cache._build_report  현황판이 쓰는 캐시 경로(핵심)
-  2) 마감이 8월에만 들어왔다
-     root_boot_cache 가 month == 8 로 고정돼 있었다. 어느 달이든 연동값을 쓴다.
+  2) 마감이 8월에만 들어왔다(root_boot_cache 가 month == 8 고정)
   3) 열 구성이 회의 흐름과 달랐다
      3차가 확정·예상 두 칸을 차지하고 가마감·잠정마감이 없었다.
-     회의 순서(5일 2차 · 15일 3차 · 25일 가마감 · 익월 마감)에 맞춰 바꾼다.
        전월 비교  전월 가마감 · 전월 잠정마감 · 전월 확정마감
        당월      1차 예상 · 2차 예상 · 3차 예상 · 가마감 · 마감
      표 구조(열 개수)는 그대로 두고 값과 머리글만 바꾼다.
   4) 배너 문구가 "8월 잠정마감 · 9월 2차"로 고정이었다
   5) 지금이 몇 차 기간인지 표에 표시가 없었다
-     날짜로 현재 회차를 판정해 그 열만 강조한다.
-       ~4일 1차 · 5~14일 2차 · 15~23일 3차 · 24일~ 가마감 · 익월 마감
+     당월 진행 회차와 전월 확정마감을 함께 강조한다. 회의에서 보는 두 기준이
+     '��난달 확정 결과'와 '이번달 진행 숫자'이기 때문이다. 성격이 달라 색을
+     구분한다(확정=초록 계열, 진행=파랑 계열).
+  6) 가마감·마감 칸이 노란 '수동 입력' 색이었고 값이 0으로 보였다
+     연동값으로 채우는 칸이므로 노란색을 떼고, 아직 시점이 안 된 값은 0 대신
+     '-' 로 표시한다. 0원으로 읽히는 오해를 막는다.
 
 값의 출처
   SalesOps /api/performance 계약 필드만 쓴다. 화면 숫자를 옮겨 적지 않는다.
 """
 
 import datetime
+import re
 
 import salesops_actual_sync as prev
 import browser_bridge as bridge
@@ -38,6 +41,8 @@ _BANNER = {}
 
 # 당월 회차 열의 CSS 클래스. excel_ui 의 셀 클래스와 같다.
 STAGE_CLASS = {"1차": "c1", "2차": "c2", "3차": "c3c", "가마감": "c3f", "마감": "cc"}
+STAGE_HEADER = {"1차": "1차 예상", "2차": "2차 예상", "3차": "3차 예상",
+                "가마감": "가마감", "마감": "마감"}
 
 
 def _num(value):
@@ -138,12 +143,10 @@ def _fill(module, report, year, month):
                 row[field] = cur[field]
         if cur.get("third_forecast") is not None:
             row["third_confirmed"] = cur["third_forecast"]
-        if cur.get("flash_close") is not None:
-            row["third_forecast"] = cur["flash_close"]
+        row["third_forecast"] = cur.get("flash_close")
         close = cur.get("close") or cur.get("provisional_close")
-        if close is not None:
-            row["close"] = close
-            row["close_has"] = True
+        row["close"] = close
+        row["close_has"] = close is not None
 
     summer = getattr(module, "_sum", None) or live._sum
     fields = (
@@ -156,7 +159,7 @@ def _fill(module, report, year, month):
             row for row in details if row.get("business") == total.get("business")
         ]
         for field in fields:
-            total[field] = summer(scope, field)
+            total[field] = summer(scope, field) or None
         total["close_has"] = bool(scope) and all(row.get("close_has") for row in scope)
 
     stages = [v.get("close_stage") for v in previous.values() if v.get("close_stage")]
@@ -212,15 +215,25 @@ for _module in (live, cache):
     _wrap_banner(_module)
 
 
-# ---------- 4·5) 표 머리글 정리 + 현재 회차 강조 ----------
+# ---------- 4·5·6) 머리글 정리 · 회차 강조 · 색과 빈값 표시 ----------
 
 _STAGE_CSS = """<style>
+/* 가마감·마감은 연동값으로 채우는 칸이다. 수동 입력을 뜻하는 노란색을 뗀다. */
+table.report td.c3f { background:#f7fbff !important; }
+table.report td.cc { background:#f4f7fa !important; }
+/* 이번달 진행 회차 */
 table.report td.stage-now, table.report th.stage-now { background:#e8f3ff !important; }
 table.report th.stage-now { color:#0d3b66; }
 table.report td.stage-now { font-weight:800; box-shadow: inset 2px 0 0 #2f7ac6, inset -2px 0 0 #2f7ac6; }
 table.report tr.grand td.stage-now, table.report tr.subtotal td.stage-now { background:#d7e9fb !important; }
+/* 지난달 확정마감 */
+table.report td.stage-done, table.report th.stage-done { background:#eaf6ee !important; }
+table.report th.stage-done { color:#14532d; }
+table.report td.stage-done { font-weight:800; box-shadow: inset 2px 0 0 #2f9e74, inset -2px 0 0 #2f9e74; }
+table.report tr.grand td.stage-done, table.report tr.subtotal td.stage-done { background:#dbeee2 !important; }
 .stage-now-note { margin:0 0 10px; padding:8px 12px; border-radius:7px; border:1px solid #bcd8f1;
   background:#eef6ff; font-size:13px; font-weight:700; color:#0d3b66; }
+.stage-now-note b { color:#14532d; }
 </style>"""
 
 _original_render_report = ui.render_report
@@ -236,7 +249,7 @@ def render_report(report, user, capture=False):
             f"<th>{previous_month}월 1차</th><th>{previous_month}월 가마감</th>"
             f"<th>{previous_month}월 마감</th>",
             f"<th>{previous_month}월 가마감</th><th>{previous_month}월 잠정마감</th>"
-            f"<th>{previous_month}월 {stage}</th>",
+            f"<th class='stage-done'>{previous_month}월 {stage}</th>",
             1,
         )
     html = html.replace(
@@ -245,18 +258,25 @@ def render_report(report, user, capture=False):
         1,
     )
 
-    # 지금이 몇 차 기간인지 해당 열만 강조한다.
+    # 전월 확정마감 열(전월 비교 세 번째 칸)에 표시
+    html = re.sub(
+        r"(<td>[^<]*</td><td>[^<]*</td>)(<td>)(?=[^<]*</td><td class='c1')",
+        r"\1<td class='stage-done'>",
+        html,
+    )
+
+    # 이번달 진행 회차 열에 표시
     today = datetime.date.today()
     round_label = current_round(today)
-    header = {"1차": "1차 예상", "2차": "2차 예상", "3차": "3차 예상",
-              "가마감": "가마감", "마감": "마감"}[round_label]
+    header = STAGE_HEADER[round_label]
     cell_class = STAGE_CLASS[round_label]
     html = html.replace(f"<th>{header}</th>", f"<th class='stage-now'>{header}</th>", 1)
     html = html.replace(f"<td class='{cell_class}'>", f"<td class='{cell_class} stage-now'>")
     html = html.replace(
         "<div class='table-wrap'>",
         f"<p class='stage-now-note'>오늘 {today.month}월 {today.day}일 · "
-        f"{round_label} 기간입니다. 표에서 {header} 열을 강조했습니다.</p>"
+        f"{round_label} 기간입니다. 이번달 {header}(파랑)과 "
+        f"<b>{previous_month}월 {stage}(초록)</b>을 강조했습니다.</p>"
         "<div class='table-wrap'>",
         1,
     )
