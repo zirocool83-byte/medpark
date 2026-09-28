@@ -16,8 +16,13 @@
   잠정마감 provisional_close_amount 확정마감 final_close_amount
   기존/신규는 그쪽 판정(사람 지정 우선, 없으면 출고 이력)을 그대로 쓴다.
 
+당겨오는 달
+  이번 달 · 전월 · 다음 달 셋이다. 이번 달을 조회한 화면에 '다음 달 1차'
+  칸이 있는데 브릿지가 이번 달과 전월만 읽어 늘 비어 있었다. 9월 회의에서
+  10월 출발선을 같이 보려면 다음 달까지 읽어야 한다. 국내 브릿지도 같다.
+
 원칙
-  국내 값은 건드리지 않는다. 해외 행만 덮어쓴다.
+  국내 값은 건드리지 않는다. 해외 행만 덮어쓴다(다음 달 1차 칸은 예외).
   값이 없으면 아무것도 쓰지 않는다(마지막 값 유지).
   차수가 아직 없는 칸은 0 이 아니라 빈칸으로 둔다(국내·해외 공통).
 """
@@ -28,6 +33,7 @@ import os
 from pathlib import Path
 
 import third_round_live as prev
+import browser_bridge as bridge
 import root_boot_cache as cache
 import root_live_fetch as live
 from flask import jsonify, request
@@ -176,9 +182,10 @@ def overseas_health():
         y0 = m0 = 0
     if y0 and 1 <= m0 <= 12:
         py, pm = ((y0 - 1, 12) if m0 == 1 else (y0, m0 - 1))
-        wanted = ((y0, m0), (py, pm))
+        ny, nx = ((y0 + 1, 1) if m0 == 12 else (y0, m0 + 1))
+        wanted = ((y0, m0), (py, pm), (ny, nx))
     else:
-        wanted = ((2026, 9), (2026, 8))
+        wanted = ((2026, 9), (2026, 8), (2026, 10))
     for year, month in wanted:
         index, saved_at = _load(year, month)
         out["%d-%02d" % (year, month)] = {
@@ -201,7 +208,21 @@ def _fill_overseas(module, report, year, month):
     current, _ = _load(year, month)
     py, pm = ((year - 1, 12) if month == 1 else (year, month - 1))
     previous, _ = _load(py, pm)
+    # 다음 달 1차. 회의는 이번 달 숫자와 다음 달 출발선을 같이 본다.
+    # 그래서 이번 달을 조회한 화면에 '다음 달 1차' 칸이 있다.
+    ny, nm = ((year + 1, 1) if month == 12 else (year, month + 1))
+    nxt_over, _ = _load(ny, nm)
+    try:
+        nxt_dom = live._fetch(ny, nm)[0] or {}
+    except Exception:
+        nxt_dom = {}
     details = [row for row in rows if not row.get("is_total")]
+    for row in details:
+        key = (row.get("business"), row.get("region"), row.get("kind"))
+        src = nxt_over if row.get("region") == "해외" else nxt_dom
+        nxt = (src.get(key) or {}).get("first")
+        if nxt is not None:
+            row["next_first"] = nxt
     for row in details:
         if row.get("region") != "해외":
             continue
@@ -280,7 +301,9 @@ _SCRIPT = """
   var m = parseInt(u.searchParams.get('month') || '9', 10);
   var py = (m === 1) ? y - 1 : y;
   var pm = (m === 1) ? 12 : m - 1;
-  var pairs = [[y, m], [py, pm]];
+  var ny = (m === 12) ? y + 1 : y;
+  var nx = (m === 12) ? 1 : m + 1;
+  var pairs = [[y, m], [py, pm], [ny, nx]];
   var months = [];
   function step(i){
     if (i >= pairs.length) { return post(); }
@@ -323,6 +346,20 @@ def render_report(report, user, capture=False):
 
 
 ui.render_report = render_report
+
+
+# 국내 브릿지도 다음 달까지 당겨오게 한다. 이번 달을 조회한 화면에
+# '다음 달 1차' 칸이 있는데 브릿지가 이번 달과 전월만 읽어서 늘 비어 있었다.
+# browser_bridge 를 고치지 않고 주입 스크립트만 바꾼다.
+_BRIDGE_OLD = "var pairs = [[y, m], [py, pm]];"
+_BRIDGE_NEW = ("var ny = (m === 12) ? y + 1 : y;"
+               " var nx = (m === 12) ? 1 : m + 1;"
+               " var pairs = [[y, m], [py, pm], [ny, nx]];")
+try:
+    if _BRIDGE_OLD in bridge.SCRIPT:
+        bridge.SCRIPT = bridge.SCRIPT.replace(_BRIDGE_OLD, _BRIDGE_NEW, 1)
+except Exception:
+    pass
 
 try:
     cache._CACHE.clear()
