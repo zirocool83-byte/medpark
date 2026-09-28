@@ -13,11 +13,13 @@
 회차 매핑 (medpark-global 이 이미 회차별 기준을 적용해 내려준다)
   1차 예상 first_fcst_amount      2차 예상 second_fcst_amount
   3차 예상 third_estimated_amount 가마감   flash_close_amount
+  잠정마감 provisional_close_amount 확정마감 final_close_amount
   기존/신규는 그쪽 판정(사람 지정 우선, 없으면 출고 이력)을 그대로 쓴다.
 
 원칙
   국내 값은 건드리지 않는다. 해외 행만 덮어쓴다.
   값이 없으면 아무것도 쓰지 않는다(마지막 값 유지).
+  차수가 아직 없는 칸은 0 이 아니라 빈칸으로 둔다(국내·해외 공통).
 """
 
 import datetime
@@ -44,6 +46,8 @@ FIELD_MAP = {
     "second": "second_fcst_amount",
     "third_forecast": "third_estimated_amount",
     "flash_close": "flash_close_amount",
+    "provisional_close": "provisional_close_amount",
+    "final_close": "final_close_amount",
 }
 
 
@@ -101,6 +105,34 @@ def _parse(payload):
         index[key] = {
             field: _num(row.get(source)) for field, source in FIELD_MAP.items()
         }
+    return _blank_missing(index)
+
+
+# 차수가 아직 없으면 0 이 아니라 빈칸이어야 한다.
+# medpark-global 은 없는 차수를 빈값으로 내리지만 SalesOps 는 0 으로 내린다.
+# 여섯 행이 모두 0 이면 그 차수는 아직 만들지 않은 것이다. 0 을 그대로
+# 앉히면 현황판에 "가마감 0원"으로 찍혀 회의에서 오해를 낳는다.
+_ROUND_FIELDS = ("first", "second", "third_confirmed", "third_forecast",
+                 "close", "prev_first", "prev_preclose", "prev_close")
+
+
+def _all_zero(values):
+    nums = [v for v in values if isinstance(v, (int, float))]
+    return bool(nums) and not any(nums)
+
+
+def _blank_missing(index):
+    if not index:
+        return index
+    fields = set()
+    for row in index.values():
+        fields.update(row)
+    for field in fields:
+        if not _all_zero([row.get(field) for row in index.values()]):
+            continue
+        for row in index.values():
+            if isinstance(row.get(field), (int, float)):
+                row[field] = None
     return index
 
 
@@ -137,7 +169,17 @@ def overseas_sync():
 @app.get("/overseas-health")
 def overseas_health():
     out = {}
-    for year, month in ((2026, 9), (2026, 8)):
+    try:
+        y0 = int(request.args.get("year") or 0)
+        m0 = int(request.args.get("month") or 0)
+    except Exception:
+        y0 = m0 = 0
+    if y0 and 1 <= m0 <= 12:
+        py, pm = ((y0 - 1, 12) if m0 == 1 else (y0, m0 - 1))
+        wanted = ((y0, m0), (py, pm))
+    else:
+        wanted = ((2026, 9), (2026, 8))
+    for year, month in wanted:
         index, saved_at = _load(year, month)
         out["%d-%02d" % (year, month)] = {
             "rows": len(index), "saved_at": saved_at,
@@ -175,8 +217,28 @@ def _fill_overseas(module, report, year, month):
             row["third_confirmed"] = cur["third_forecast"]
         if cur.get("flash_close") is not None:
             row["third_forecast"] = cur["flash_close"]
+        close = cur.get("final_close") or cur.get("provisional_close")
+        if close is not None:
+            row["close"] = close
+            row["close_has"] = True
+        # 전월 비교: 가마감 → 잠정마감 → 확정마감. 국내와 같은 자리를 쓴다.
         if old.get("flash_close") is not None:
             row["prev_first"] = old["flash_close"]
+        if old.get("provisional_close") is not None:
+            row["prev_preclose"] = old["provisional_close"]
+        if old.get("final_close") is not None:
+            row["prev_close"] = old["final_close"]
+    # 국내도 같은 규칙을 적용한다. SalesOps 가 없는 차수를 0 으로 내려서
+    # third_round_live 가 그 0 을 그대로 앉혔다. 여섯 행이 모두 0 인 칸은 비운다.
+    dom = [row for row in details if row.get("region") == "국내"]
+    for field in _ROUND_FIELDS:
+        if _all_zero([row.get(field) for row in dom]):
+            for row in dom:
+                if isinstance(row.get(field), (int, float)):
+                    row[field] = None
+                if field == "close":
+                    row["close_has"] = False
+
     summer = getattr(module, "_sum", None) or live._sum
     fields = (
         "prev_first", "prev_preclose", "prev_close", "first", "second",
