@@ -11,6 +11,7 @@
 import traceback
 
 CANDIDATES = [
+    "prev_compare_trim",
     "narrative_round_fix",
     "overseas_live",
     "third_round_live",
