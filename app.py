@@ -11,6 +11,7 @@
 import traceback
 
 CANDIDATES = [
+    "ytd_stage",
     "pptx_field_fix",
     "prev_compare_trim",
     "narrative_round_fix",
