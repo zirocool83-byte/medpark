@@ -82,3 +82,27 @@ for _module in (live, cache):
 for _col in (tcfg.MIDDLE.get("r1") or []):
     if _col.get("label") == "{pm}월 잠정마감" and _col.get("f") == "prev_close":
         _col["f"] = "prev_preclose"
+
+
+# ---------- 문안 작성기: 칸 → 필드 연결을 현황판과 같게 ----------
+# 문안은 '그 달' 숫자를 다음 달 리포트의 전월 칸에서 읽는다. 현황판 칸을
+# 회의 흐름대로 바꾼 뒤(가마감=prev_first, 잠정마감=prev_preclose,
+# 확정마감=prev_close) 문안 쪽 연결이 예전 자리에 남아 있었다.
+# 또 잠정마감을 '처음 본 마감값'으로 붙잡아 두는 방식이라, 9월 9일 마감값이
+# 0일 때 국내 9월 잠정이 0으로 굳어 문안에 숫자가 안 들어왔다.
+# 이제 잠정은 SalesOps·해외 오더 파이프라인이 내려주는 잠정마감 값을 그대로 쓴다.
+import narrative_page as npage
+
+_NP_PREV = {"prev_first": "preclose", "prev_preclose": "provisional", "prev_close": "close"}
+_NP_OWN = tuple(f for f in npage.OWN_FIELDS if f != "close")
+
+
+def _period_rows(year, month):
+    out = {}
+    npage._merge(out, npage._build(year, month), {f: f for f in _NP_OWN})
+    ny, nm = (year + 1, 1) if month == 12 else (year, month + 1)
+    npage._merge(out, npage._build(ny, nm), _NP_PREV)
+    return out
+
+
+npage._period_rows = _period_rows
