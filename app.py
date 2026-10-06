@@ -11,6 +11,7 @@
 import traceback
 
 CANDIDATES = [
+    "flash_baseline",
     "close_confirmed_only",
     "ytd_stage",
     "pptx_field_fix",
