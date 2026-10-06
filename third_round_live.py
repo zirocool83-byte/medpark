@@ -16,11 +16,16 @@
   4) 배너 문구가 "8월 잠정마감 · 9월 2차"로 고정이었다
   5) 지금이 몇 차 기간인지 표에 표시가 없었다
      당월 진행 회차와 전월 확정마감을 함께 강조한다. 회의에서 보는 두 기준이
-     '��난달 확정 결과'와 '이번달 진행 숫자'이기 때문이다. 성격이 달라 색을
+     '지난달 확정 결과'와 '이번달 진행 숫자'이기 때문이다. 성격이 달라 색을
      구분한다(확정=초록 계열, 진행=파랑 계열).
   6) 가마감·마감 칸이 노란 '수동 입력' 색이었고 값이 0으로 보였다
      연동값으로 채우는 칸이므로 노란색을 떼고, 아직 시점이 안 된 값은 0 대신
      '-' 로 표시한다. 0원으로 읽히는 오해를 막는다.
+  7) 전월 비교에 같은 이름의 칸이 두 개 보였다(2026-10-06)
+     SalesOps 는 잠긴 월마감 금액을 단계와 무관하게 close 로 내려준다.
+     잠정마감만 한 달의 금액이 확정마감 칸에 앉고, 머리글까지 그 달의
+     현재 단계 이름을 쓰는 바람에 '9월 잠정마감'이 두 칸이 됐다.
+     확정마감 칸은 확정마감일 때만 채우고, 머리글은 칸의 뜻으로 고정한다.
 
 값의 출처
   SalesOps /api/performance 계약 필드만 쓴다. 화면 숫자를 옮겨 적지 않는다.
@@ -135,7 +140,10 @@ def _fill(module, report, year, month):
             row["prev_first"] = old["flash_close"]
         if old.get("provisional_close") is not None:
             row["prev_preclose"] = old["provisional_close"]
-        if old.get("close") is not None:
+        # 확정마감 칸은 확정마감 때만 채운다. SalesOps 는 잠긴 금액을 단계와
+        # 무관하게 close 로 내려주므로, 잠정마감 중인 달의 금액이 확정마감
+        # 칸에 앉아 잠정마감 칸과 같은 숫자가 두 번 보였다.
+        if old.get("close") is not None and old.get("close_stage") == "확정마감":
             row["prev_close"] = old["close"]
         # 당월: 1차 → 2차 → 3차 예상 → 가마감 → 마감
         for field in ("first", "second"):
@@ -245,11 +253,13 @@ def render_report(report, user, capture=False):
     previous_month = ((month - 1) or 12) if month else None
     stage = (_BANNER.get((report.get("year"), month)) or {}).get("previous_stage") or "마감"
     if previous_month:
+        # 머리글은 칸의 뜻으로 고정한다. 그 달의 현재 단계 이름을 쓰면
+        # 잠정마감 중일 때 '잠정마감' 칸이 두 개가 된다.
         html = html.replace(
             f"<th>{previous_month}월 1차</th><th>{previous_month}월 가마감</th>"
             f"<th>{previous_month}월 마감</th>",
             f"<th>{previous_month}월 가마감</th><th>{previous_month}월 잠정마감</th>"
-            f"<th class='stage-done'>{previous_month}월 {stage}</th>",
+            f"<th class='stage-done'>{previous_month}월 확정마감</th>",
             1,
         )
     html = html.replace(
