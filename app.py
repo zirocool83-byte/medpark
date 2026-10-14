@@ -7,3 +7,8 @@ def app(environ,start_response):
  body=MOVED if blocked else PAGE
  start_response('410 Gone' if blocked else '200 OK',[('Content-Type','application/json; charset=utf-8' if blocked else 'text/html; charset=utf-8'),('Content-Length',str(len(body))),('Cache-Control','no-store, max-age=0'),('X-MedPark-Retired','1')])
  return [b'' if method=='HEAD' else body]
+
+if __name__=='__main__':
+ import os
+ from wsgiref.simple_server import make_server
+ with make_server('0.0.0.0',int(os.environ.get('PORT','8000')),app) as server:server.serve_forever()
